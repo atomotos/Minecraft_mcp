@@ -1,0 +1,391 @@
+# Minecraft Java Edition MCP Server 2.0 — 3-Phase Execution & Verification Plan
+
+**Target Environment**: Minecraft Java Edition `26.2` (Fabric Server Engine)  
+**Protocol Version**: MCP 2.0 Specification (`mcp>=2.2.0`, Python SDK v2 `MCPServer`, JSON-RPC 2.0 stdio)  
+**JVM Toolchain**: OpenJDK 25 | **Gradle**: 9.5.0 | **Python**: 3.14+ (`uv`)  
+**Bridge Address**: `http://127.0.0.1:25585/api/v1` | `ws://127.0.0.1:25585/api/v1/ws/player`  
+**Current Milestone**: **Phase 1 & Phase 2 Completed & Verified Live** | **Phase 3 Next (Combat, Navigation & Autonomous Blueprints)**
+
+---
+
+## 1. Plan Overview & Testing Architecture
+
+The entire project is structured into **3 Core Phases**, strictly adhering to bottom-up vertical slicing. Every phase incorporates the full spectrum of **MCP 2.0 primitives: Tools, Resources, and Prompts**.
+
+No phase is marked complete until it passes **two distinct sets of real-time tests** against a live Minecraft server instance:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        Phase Verification Model                        │
+├────────────────────────────────────────────────────────────────────────┤
+│  Live Minecraft 26.2 Server Running (`./gradlew runServer` on :25585)  │
+│                                   │                                    │
+│       ┌───────────────────────────┴───────────────────────────┐        │
+│       ▼                                                       ▼        │
+│  [Test Set A: Python MCP 2.0 Client]                   [Test Set B: Antigravity]
+│  - Standalone Python test script                       - Register in Antigravity config
+│  - Connects via MCP 2.0 ClientSession over stdio       - Issue natural language prompt
+│  - Validates Tools, Resources & Prompts                - Verify agent tool call loop
+│  - Automated pass/fail assertions with timeouts        - Inspect visual game changes
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Phase 1: Observation & World State Stack (MCP 2.0)
+
+### 1.1 Goal & Scope
+Establish the embedded Netty communication bridge on the Fabric server, thread-safe tick execution, and the complete observation pipeline (vitals, position, inventory, world blocks, entities, and real-time WebSocket push updates). Expose observation via MCP 2.0 Tools, subscribable Resources, and interactive Prompts.
+
+### 1.2 Components Built
+
+#### A. Fabric Mod Bridge (`fabric-mod/src/main/java/com/minecraftmcp/`)
+- **Tick Scheduler**: `com.minecraftmcp.bridge.scheduler.TickSchedulerService` queueing tasks onto `ServerTickEvents.END_SERVER_TICK`.
+- **Netty HTTP/WS Server**: `com.minecraftmcp.bridge.net.HttpBridgeServer` bound to `127.0.0.1:25585` on `ServerLifecycleEvents.SERVER_STARTED`.
+- **Observation Controllers & Services**:
+  - `GET /api/v1/status`: Server status, TPS, MSPT, connected players.
+  - `GET /api/v1/player/status`: Player health, food, saturation, gamemode, dimension, held item.
+  - `GET /api/v1/player/position`: High-speed position (`x, y, z`) and rotation (`yaw, pitch, headYaw`).
+  - `GET /api/v1/player/inventory`: Full 36 inventory slots, armor, and offhand.
+  - `GET /api/v1/world/block`: Single coordinate block state, properties, and solidity inspection.
+  - `POST /api/v1/world/blocks`: Bounded 3D area scan (cuboid max 32,768 blocks).
+  - `GET /api/v1/world/entities`: Nearby living entities, players, and items within radius.
+  - `GET /api/v1/world/info`: Time of day, weather, dimension limits, world border.
+  - `WS /api/v1/ws/player`: WebSocket position & vitals streaming on every server tick (`intervalTicks: 1`).
+
+#### B. Python MCP 2.0 Server (`src/minecraft_mcp/`)
+- **Transport Client**: Async HTTP & WebSocket client (`BridgeClient`) connecting to `127.0.0.1:25585`.
+- **Pydantic Schemas**: Strict models for all player vitals, block positions, entity summaries, and server telemetry.
+- **MCP 2.0 Tools (`@server.tool`)**:
+  - `get_server_status()`: Gatekeeper health check (connected, TPS, MSPT, player list).
+  - `get_player_state(player_name)`: Full player overview.
+  - `get_player_position(player_name)`: Lightweight coordinate lookup.
+  - `get_inventory(player_name)`: Detailed slot and item breakdown.
+  - `get_block(x, y, z)`: Inspect block at coordinates.
+  - `inspect_area(center, radius, format)`: Compact terrain summary (`summary`, `ascii`, `sparse`).
+  - `get_nearby_entities(radius, entity_type)`: Scans surrounding entities.
+  - `get_world_info()`: Time, weather, and world metadata.
+- **MCP 2.0 Resources (`@server.resource`)**:
+  - `minecraft://player/position`: Real-time streaming position resource.
+  - `minecraft://player/inventory`: Inventory state resource.
+  - `minecraft://world`: World time, weather, and dimension info resource.
+  - `minecraft://entities/nearby`: Nearby entities resource.
+- **MCP 2.0 Prompts (`@server.prompt`)**:
+  - `explore_area(center, radius)`: Bootstraps LLM for terrain surveying, resource discovery, and cartography.
+
+### 1.3 Real-Time Live Testing
+
+#### Server Preparation
+```bash
+cd fabric-mod && ./gradlew runServer
+# Wait for: [Server thread/INFO]: Done (...)! For help, type "help"
+```
+
+#### Test Set A: Python MCP 2.0 Client Script (`scripts/test_phase1_client.py`)
+Run automated script connecting via MCP stdio client:
+```bash
+source .venv/bin/activate
+python scripts/test_phase1_client.py
+```
+**Verification Checks**:
+- [ ] Connects to MCP 2.0 server process over stdio and lists tools, resources, and prompts.
+- [ ] Calls `get_server_status()` $\rightarrow$ confirms `connected: true`, TPS $\approx 20.0$.
+- [ ] Calls `get_player_state()` $\rightarrow$ matches in-game coordinates and health (20.0).
+- [ ] Calls `get_inventory()` $\rightarrow$ accurately reports empty or equipped items.
+- [ ] Calls `inspect_area()` $\rightarrow$ returns token-efficient terrain digest without token blowout.
+- [ ] Reads resources `minecraft://world` and `minecraft://player/position`.
+- [ ] Subscribes to `minecraft://player/position` $\rightarrow$ receives live tick updates over WebSocket.
+
+#### Test Set B: Antigravity MCP Integration
+1. Configure Antigravity MCP config (`~/.gemini/config/mcp_config.json`):
+```json
+{
+  "mcpServers": {
+    "minecraft": {
+      "command": "/Users/arhamowais/minecraft-mcp/.venv/bin/python",
+      "args": ["-m", "minecraft_mcp.server"],
+      "cwd": "/Users/arhamowais/minecraft-mcp"
+    }
+  }
+}
+```
+2. Prompt Antigravity in chat:
+   > *"Check if Minecraft is running, tell me my player's health, position, and summarize the terrain 8 blocks around me."*
+3. **Verification Checks**:
+   - [ ] Antigravity identifies and calls `get_server_status`.
+   - [ ] Antigravity invokes `get_player_state` and `inspect_area`.
+   - [ ] Antigravity returns a conversational, accurate summary of live in-game surroundings.
+
+---
+
+## Phase 2: World Mutation, Player Actions & Direct Building (MCP 2.0)
+
+### 2.1 Goal & Scope
+Deliver deterministic, verified world manipulation, player physical actions, generic block interactions, and basic waypoint movement. Phase 2 transforms the agent from a passive observer into an active actor while establishing strict safety boundaries, structured action feedback, and an explicit verification loop.
+
+---
+
+### 2.2 Core Architectural Principles for Phase 2
+
+#### A. The Action Verification Pattern (OBSERVE → ACT → VERIFY)
+Phase 2 establishes the foundational feedback cycle for all modifying operations:
+
+```
+    ┌───────────┐
+    │  OBSERVE  │  Inspect initial local state (get_block, get_player_position, get_inventory)
+    └─────┬─────┘
+          ▼
+    ┌───────────┐
+    │   PLAN    │  Determine required action and validate parameters against safety boundaries
+    └─────┬─────┘
+          ▼
+    ┌───────────┐
+    │    ACT    │  Dispatch deterministic mutation/action primitive to Fabric bridge
+    └─────┬─────┘
+          ▼
+    ┌───────────┐
+    │  VERIFY   │  Query world state to confirm actual physical change matches expectation
+    └─────┬─────┘
+          ▼
+    ┌───────────┐
+    │  OBSERVE  │  Re-evaluate environment and provide structured result to agentReAct loop
+    └───────────┘
+```
+
+Mutation tools and ReAct loops must **never blindly assume success**:
+- `place_block()` $\rightarrow$ call `get_block()` $\rightarrow$ verify target coordinates contain expected block state.
+- `break_block()` $\rightarrow$ call `get_block()` $\rightarrow$ verify block transitioned to `minecraft:air` or expected dropped state.
+- `move_to()` $\rightarrow$ call `get_player_position()` $\rightarrow$ verify player arrived within specified `tolerance` distance.
+- `interact_with_block()` $\rightarrow$ call `get_block()` / `get_inventory()` $\rightarrow$ verify open/closed state or container transaction.
+
+This verification discipline established in Phase 2 guarantees that Phase 3 autonomous agents can detect failures, recover from unexpected obstacles, and avoid corrupting complex construction projects.
+
+#### B. Structured Action Results
+Every mutation and player action tool returns a rich, descriptive JSON model rather than a primitive `{"success": true}` boolean. This gives the LLM full visibility into pre- and post-action state:
+
+```json
+{
+  "success": true,
+  "action": "place_block",
+  "position": { "x": 10, "y": 64, "z": 20 },
+  "block": "minecraft:oak_planks",
+  "previous_block": "minecraft:air",
+  "verified": true,
+  "tick": 1420
+}
+```
+
+For movement operations:
+```json
+{
+  "success": true,
+  "action": "move_to",
+  "destination": { "x": 15.0, "y": 64.0, "z": 20.0 },
+  "final_position": { "x": 14.88, "y": 64.0, "z": 19.95 },
+  "distance_remaining": 0.13,
+  "status": "arrived",
+  "stuck": false,
+  "tick": 1455
+}
+```
+
+#### C. Lightweight Action State & Cancellation Model
+To prevent overlapping, conflicting, or runaway operations, Phase 2 implements a lightweight action state model:
+- **States**: `IDLE`, `MOVING`, `BUILDING`, `MINING`, `INTERACTING`, `CANCELLED`, `FAILED`.
+- Any active long-running action (such as continuous waypoint stepping or multi-block batch placement) can be immediately aborted via `stop_movement()` or action cancellation signals.
+- Exposed via MCP resource `minecraft://action/state` for real-time monitoring by the agent.
+
+#### D. Safety Boundaries vs. LLM Planning
+Phase 2 enforces a strict separation between code-level safety boundaries and LLM cognitive planning:
+- **MCP Safety & Validation Layer (Deterministic & Non-Bypasable)**:
+  - Coordinate bounds check: $Y \in [-64, 320]$, within valid world border.
+  - Batch operation limit: $\le 500$ blocks per tool call.
+  - Block identifier check: must resolve to valid registered `BuiltInRegistries.BLOCK` namespace.
+  - Loaded chunk verification: rejects operations targeting unloaded chunks (`CHUNK_UNLOADED`).
+- **LLM Agent Planning (Semantic & Goal-Driven)**:
+  - The LLM ReAct agent decides *WHAT* to build, *WHERE* to build, and *WHEN* to interact.
+  - The MCP layer deterministically validates and executes requested primitives, returning actionable error codes (`INVALID_ARGUMENT`, `OUT_OF_BOUNDS`, `BLOCK_NOT_FOUND`, `CHUNK_UNLOADED`) if boundaries are violated.
+
+#### E. Phase 2 vs. Phase 3 Responsibility Boundary
+To maintain engineering rigor, the architectural division between Phase 2 and Phase 3 is strictly defined:
+
+| Capability Area | Phase 2 (Deterministic Execution & Verification) | Phase 3 (Autonomy, Tactics & Complex Planning) |
+| :--- | :--- | :--- |
+| **World Mutation** | Single & batch block placement/breaking with pre-validation | Procedural architectural generation, structure blueprint compilers |
+| **Movement** | Basic waypoint/step movement (`move_to`, `stop_movement`, stuck detection) | Full 3D A* pathfinding, dynamic obstacle avoidance, drop-down jumping |
+| **Block Interaction** | Generic interaction primitive (`interact_with_block`) | Multi-step crafting pipelines, automated smelting, container sorting |
+| **Combat** | Not in scope | Weapon cooldown timing, line-of-sight tracking, tactical retreat loops |
+| **Agent Autonomy** | Atomic tool execution with verified results | Autonomous long-horizon ReAct agents (`build_house`, `defend_perimeter`) |
+
+---
+
+### 2.3 Components Built
+
+#### A. Fabric Mod Bridge (`fabric-mod/src/main/java/com/minecraftmcp/`)
+- **World Mutation Controllers & Services**:
+  - `POST /api/v1/world/set_block`: Thread-safe block placement using `Block.UPDATE_ALL_IMMEDIATE` (`11`). Returns previous and new block state.
+  - `POST /api/v1/world/break_block`: Block destruction with optional particle effects and item resource drops.
+  - `POST /api/v1/world/check_placement`: Validates whether a given block state can survive at coordinates without placing it.
+  - `POST /api/v1/world/interact`: Generic block interaction triggering `player.gameMode.useItemOn()` for containers, crafting tables, furnaces, doors, buttons, and levers.
+- **Player Action & Movement Controllers & Services**:
+  - `POST /api/v1/player/teleport`: Precise position and orientation updates on server tick.
+  - `POST /api/v1/player/rotate`: Head and body orientation adjustments (yaw/pitch).
+  - `POST /api/v1/player/select_slot`: Active hotbar slot selection (0–8).
+  - `POST /api/v1/player/equip`: Equips items to armor slots (`HEAD`, `CHEST`, `LEGS`, `FEET`) or `OFFHAND`.
+  - `POST /api/v1/player/use_item`: Simulates right-click in air or using held item.
+  - `POST /api/v1/player/mine`: Simulates progressive or creative block mining with held tool.
+  - `POST /api/v1/player/drop`: Drops held item stack or single item.
+  - `POST /api/v1/player/swing`: Triggers arm swing animation.
+  - `POST /api/v1/player/move`: Basic waypoint step interpolation towards target coordinates with collision checking.
+  - `POST /api/v1/player/stop`: Halts active movement, cancels current step loop, and resets action state to `IDLE`.
+
+#### B. Python MCP 2.0 Server (`src/minecraft_mcp/`)
+- **Safety Validators & Pipelines**:
+  - Validates coordinates, $Y \in [-64, 320]$, batch sizes ($\le 500$), and namespace identifiers before invoking Fabric bridge.
+  - Six-stage transactional batch pipeline for `place_blocks` and `fill_region`:
+    `Validate Request` $\rightarrow$ `Validate Bounds` $\rightarrow$ `Validate Block IDs` $\rightarrow$ `Validate Batch Size` $\rightarrow$ `Execute` $\rightarrow$ `Verify Result`.
+- **Action State Tracker**:
+  - Tracks lifecycle state (`IDLE`, `MOVING`, `BUILDING`, etc.) and handles cooperative cancellation.
+- **FastMCP Tools (`@server.tool`)**:
+  - `place_block(x, y, z, block_id, properties)`: Places single block with post-placement verification.
+  - `place_blocks(blocks)`: Atomic batch block placement with pre-validation checklist and verification report.
+  - `break_block(x, y, z, drop_items)`: Destroys block with air verification.
+  - `fill_region(from_pos, to_pos, block_id)`: Fills bounded volume with validation.
+  - `interact_with_block(x, y, z, hand)`: **Generic block interaction primitive** for chests, crafting tables, furnaces, doors/trapdoors, buttons, and levers.
+  - `move_to(destination, speed, tolerance)`: Basic movement primitive with arrival verification and stuck detection.
+  - `stop_movement()`: Cancels current movement operation and resets velocity.
+  - `teleport_player(x, y, z, yaw, pitch)`: Direct coordinate relocation.
+  - `look_at(target_pos)`: Adjusts player pitch and yaw to face target coordinates.
+  - `select_slot(slot)`: Selects active hotbar slot index (0–8).
+  - `equip_item(slot, item_id)`: Equips specified item to designated armor or offhand slot.
+  - `use_item(hand)`: Triggers right-click with active hand.
+  - `drop_item(entire_stack)`: Drops item from active hotbar slot.
+  - `swing_arm(hand)`: Triggers client-visible hand animation.
+- **MCP 2.0 Resources (`@server.resource`)**:
+  - `minecraft://action/state`: Current player action state and movement progress.
+  - `minecraft://knowledge/blocks`: Block state metadata, properties, and valid namespace IDs.
+  - `minecraft://knowledge/items`: Equipment and item definitions.
+
+---
+
+### 2.4 Real-Time Live Testing
+
+#### Server Preparation
+```bash
+cd fabric-mod && ./gradlew runServer
+```
+
+#### Test Set A: Python MCP 2.0 Client Script (`scripts/test_phase2_client.py`)
+Run automated script connecting via MCP stdio ClientSession:
+```bash
+source .venv/bin/activate
+python scripts/test_phase2_client.py
+```
+**Verification Checks (12 Core Tests)**:
+- [ ] **1. Place Block**: Calls `place_block()` at target coordinate.
+- [ ] **2. Verify Placed Block**: Calls `get_block()` to confirm block state matches placed block.
+- [ ] **3. Break Block**: Calls `break_block()` at specified coordinate.
+- [ ] **4. Verify Broken Block**: Calls `get_block()` to confirm block transitioned to `minecraft:air`.
+- [ ] **5. Batch Placement**: Calls `place_blocks()` with a 3x3 platform payload.
+- [ ] **6. Verify Batch Placement**: Confirms all 9 coordinates match the requested material.
+- [ ] **7. Basic Movement**: Calls `move_to()` towards a reachable coordinate 3 blocks away.
+- [ ] **8. Verify Final Position**: Calls `get_player_position()` to confirm arrival within `tolerance`.
+- [ ] **9. Stop / Cancellation**: Calls `move_to()` towards distant coordinate, then immediately fires `stop_movement()`; confirms action state returns to `IDLE` and movement halts.
+- [ ] **10. Generic Block Interaction**: Calls `interact_with_block()` on a test door/trapdoor or lever; verifies toggle state.
+- [ ] **11. Structured Action Result**: Validates that all action responses return rich descriptive models (`action`, `position`, `previous_block`, `verified`).
+- [ ] **12. Safety Rejection**: Calls `place_block()` with $Y=350$ and with invalid ID `minecraft:fake_block_xyz`; confirms both requests are deterministically rejected with structured errors before modifying the world.
+
+#### Test Set B: Antigravity MCP Integration (Observe → Act → Verify Loop)
+1. Ensure MCP server configuration is active in Antigravity (`~/.gemini/config/mcp_config.json`).
+2. Prompt Antigravity in chat:
+   > *"Inspect the blocks around me, place a 3x3 platform of oak planks in front of me, verify that the platform exists, then break the center block and verify the opening."*
+3. **Verification Checks**:
+   - [ ] Antigravity queries local area using `inspect_area` or `get_block` (OBSERVE).
+   - [ ] Antigravity calls `place_blocks` to construct the platform (ACT).
+   - [ ] Antigravity calls `get_block` on the placed coordinates to confirm placement (VERIFY).
+   - [ ] Antigravity calls `break_block` on the center coordinate (ACT).
+   - [ ] Antigravity calls `get_block` on the center coordinate to confirm it is air (VERIFY).
+   - [ ] Antigravity explains its observations and confirmations based on actual tool return data rather than assuming success.
+
+---
+
+## Phase 3: Combat, 3D Navigation & Autonomous Construction (MCP 2.0)
+
+### 3.1 Goal & Scope
+Deliver high-level autonomous agent capabilities: tactical melee combat with weapon cooldowns and retreat thresholds, full 3D A* navigation across uneven terrain, and autonomous blueprint compilation (e.g. building a complete house). Expose full MCP 2.0 prompt workflows (`build_house`, `defend_player`, `build_and_defend`).
+
+### 3.2 Components Built
+
+#### A. Fabric Mod Bridge (`fabric-mod/src/main/java/com/minecraftmcp/`)
+- **Combat Controllers & Services**:
+  - `POST /api/v1/combat/attack`: Direct melee attack on entity ID, respecting weapon cooldowns.
+  - `GET /api/v1/combat/target`: Queries nearest valid hostile mob within reach ($3.5$ blocks) and line of sight.
+
+#### B. Python MCP 2.0 Server (`src/minecraft_mcp/`)
+- **3D A\* Pathfinding Engine**:
+  - Voxel walkability grid, jump step calculations, fall damage avoidance, and collision bounding.
+  - `navigate_to(destination, speed, tolerance)`: High-level path follower with dynamic re-routing and obstacle checks.
+- **Tactical Combat System**:
+  - Weapon cooldown timing (e.g., 0.625s delay for diamond swords).
+  - Reach distance verification ($\le 3.5$ blocks).
+  - Health monitoring & emergency retreat threshold ($< 6.0$ HP / 3 hearts).
+  - MCP Tools:
+    - `attack_entity(target_id)`: Cooldown-synchronized melee strike.
+    - `combat_engage(target_id)`: Complete tactical loop (approach $\rightarrow$ strike $\rightarrow$ defend $\rightarrow$ retreat).
+    - `defend()`: Raises shield or blocks.
+    - `retreat(safe_distance)`: Disengages to safe perimeter.
+- **Autonomous Construction & Blueprints**:
+  - Blueprint schema & compiler (floor, walls, roof, door, windows).
+  - Pre-execution validation (inventory check, collision safety, bounds check).
+  - High-level MCP Tools:
+    - `find_build_location(radius, required_size)`: Finds flat site using terrain flatness score.
+    - `build_house(style, size, location)`: Layer-by-layer automated shelter construction.
+    - `build_wall(...)`, `build_roof(...)`, `build_door(...)`, `build_window(...)`, `defend_perimeter(...)`.
+- **MCP 2.0 Resources**:
+  - `minecraft://agent/current_plan`: Current active blueprint or combat task state.
+  - `minecraft://knowledge/building`: Blueprint templates and structural recipes.
+  - `minecraft://knowledge/combat`: Weapon attack speeds, damage metrics, and mob reach tables.
+- **MCP 2.0 Prompts**:
+  - `build_house(location, style, size, materials)`: Full architectural construction prompt.
+  - `defend_player(protectee)`: Autonomous bodyguard sentry prompt.
+  - `build_and_defend(location, compound_size)`: Base foundation and defense prompt.
+
+### 3.3 Real-Time Live Testing
+
+#### Server Preparation
+```bash
+cd fabric-mod && ./gradlew runServer
+# Spawn test hostile mob: /summon zombie ~3 ~ ~ {NoAI:1b}
+```
+
+#### Test Set A: Python MCP 2.0 Client Script (`scripts/test_phase3_client.py`)
+```bash
+source .venv/bin/activate
+python scripts/test_phase3_client.py
+```
+**Verification Checks**:
+- [ ] Tests 3D A* pathfinding across a multi-block obstacle or elevation change.
+- [ ] Detects summoned zombie via `GET /api/v1/combat/target`.
+- [ ] Calls `attack_entity()` $\rightarrow$ verifies damage dealt, target health decreased, and attack cooldown respected.
+- [ ] Executes a minimal house blueprint $\rightarrow$ verifies layers are built sequentially and cleanly.
+
+#### Test Set B: Antigravity MCP Integration
+1. Ensure MCP server configuration is active in Antigravity.
+2. Prompt Antigravity in chat:
+   > *"Find a flat spot nearby, navigate there, build a complete small oak wooden house with a door, and defend against any monster that approaches."*
+3. **Verification Checks**:
+   - [ ] Antigravity executes `find_build_location`, surveys terrain flatness.
+   - [ ] Antigravity navigates to the selected site.
+   - [ ] Antigravity places foundation, walls, doorway, and roof using high-level building primitives.
+   - [ ] If a hostile entity comes within range, Antigravity engages or defends.
+   - [ ] User confirms a fully standing, walk-in house exists in the live Minecraft world.
+
+---
+
+## 2. Summary of Phase Gates
+
+| Phase | Core Deliverables (MCP 2.0) | Test Set A (Python Client) | Test Set B (Antigravity Integration) |
+| :--- | :--- | :--- | :--- |
+| **Phase 1** | Netty Bridge, Observation Tools, Dynamic Resources (`minecraft://...`), Prompt (`explore_area`) | `scripts/test_phase1_client.py` (Vitals, inventory, blocks, WS) | Prompt: Inspect player state & survey terrain |
+| **Phase 2** | World Mutation, Player Actions, Generic Block Interaction, Basic Movement & Action Verification | `scripts/test_phase2_client.py` (12-point suite: place, break, batch, movement, stop, interact, structured results, verification, safety) | Prompt: Observe → Act → Verify (place 3x3 platform, verify, break center, verify opening) |
+| **Phase 3** | Combat, Navigation, Blueprints, Agent Prompts (`build_house`, `defend_player`) | `scripts/test_phase3_client.py` (A* pathing, combat strikes, house build) | Prompt: Autonomous navigation, full house build & defense |

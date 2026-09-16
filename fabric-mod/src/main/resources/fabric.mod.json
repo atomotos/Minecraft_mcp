@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "minecraft-mcp-bridge",
+  "version": "${version}",
+  "name": "Minecraft MCP Bridge",
+  "description": "Minimal server-side Fabric mod implementing /mcp ping for Minecraft Java 26.2",
+  "authors": [
+    "Antigravity"
+  ],
+  "contact": {},
+  "license": "MIT",
+  "environment": "server",
+  "entrypoints": {
+    "server": [
+      "com.minecraftmcp.MinecraftMcpMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "minecraft": "~${minecraft_version}",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}
+

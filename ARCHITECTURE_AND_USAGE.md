@@ -347,3 +347,21 @@ curl -s -X POST http://127.0.0.1:25585/api/v1/world/set_block \
 | `SAFETY_VIOLATION: Y coordinate out of bounds` | Requested coordinate outside $[-64, 320]$. | Check $Y$ coordinates; Minecraft 26.2 world range is $[-64, 320]$. |
 | `Address already in use: bind` | Port 25566 or 25585 is occupied by an old process. | Kill stale processes: `lsof -ti:25585,25566 \| xargs kill -9`. |
 | `java: command not found` or Gradle build error | Missing OpenJDK 25. | Ensure OpenJDK 25 is installed at `/opt/homebrew/opt/openjdk@25`. |
+
+---
+
+## 6. Phase 3 Architectural Construction Pipeline
+
+Phase 3 introduces high-level spatial intelligence, generic blueprints, and autonomous construction:
+
+```
+Architecture ──► Blueprint ──► Construction Plan ──► Resource Plan ──► Execution ──► Verification ──► Repair
+```
+
+1. **Spatial World Model (`minecraft://world/map`)**: Tracks explored regions, landmarks, structures, and terrain flatness.
+2. **Generic Blueprint Compiler**: Compiles parameterized templates (`tower`, `bridge`, `wall`, `house`, `farm`, `temple`, `custom`) into sequenced block layers.
+3. **Resource Manager**: Computes material deficits against `get_inventory()`, handles crafting recipe resolution, and triggers `WAITING_FOR_RESOURCES` recovery.
+4. **Semantic Components**: Primitives for walls, battlements, roofs, pillars, foundations, and openings.
+5. **3D A* Navigation (`navigate_to`)**: Internal voxel pathfinder handling elevation changes and dynamic obstacles.
+6. **Structure Verifier & Recovery (`repair_structure`)**: Inspects physical blocks post-construction and automatically repairs defects.
+7. **Event Aggregator**: Buffers tick streams into high-level agent events.

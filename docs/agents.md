@@ -29,7 +29,7 @@ flowchart TD
     end
 
     subgraph EXECUTE ["4. Act"]
-        A1[Call High-Level Tools\ne.g., build_wall, combat_engage]
+        A1[Call High-Level Tools\ne.g., build_structure, build_wall]
         A2[Execute Batched Primitives\ne.g., place_blocks, move_to]
     end
 
@@ -97,60 +97,56 @@ The Building Agent is responsible for end-to-end structure creation, from terrai
 
 ---
 
-## 3. Autonomous Combat / PvP Agent
+## 3. Autonomous Architectural Planning Agent
 
-The Combat Agent handles tactical combat against hostile mobs or other players without relying on cheat commands (such as `/kill`).
+The Architectural Planning Agent handles blueprint synthesis, resource acquisition, construction sequencing, and layered building across diverse typologies (towers, bridges, walls, castles, farms, houses, temples, and custom designs).
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Patrol : Idle / Scouting
-    Patrol --> ThreatDetected : Player / Mob spotted < 25 blocks
-    ThreatDetected --> TargetAssessment : Inspect target health & gear
+    [*] --> SiteSelection : Objective received
+    SiteSelection --> BlueprintSynthesis : Flat ground identified (find_build_location)
+    BlueprintSynthesis --> ResourceCheck : Plan compiled into layers
 
-    state TargetAssessment {
-        [*] --> CheckGear
-        CheckGear --> Advantage : Agent health > target health
-        CheckGear --> Disadvantage : Target out-geared / low health
+    state ResourceCheck {
+        [*] --> AuditInventory
+        AuditInventory --> Sufficient : All blocks in inventory
+        AuditInventory --> Shortage : Deficit detected
+        Shortage --> Crafting : Convert raw materials (logs -> planks)
+        Crafting --> Sufficient : Deficit resolved
+        Shortage --> Waiting : Cannot acquire materials
     }
 
-    Advantage --> Engage : Equip weapon & approach
-    Disadvantage --> Retreat : Fall back & heal
+    Sufficient --> Construction : Begin execution
+    Waiting --> [*] : WAITING_FOR_RESOURCES
 
-    state Engage {
-        [*] --> CloseDistance
-        CloseDistance --> AttackCycle : In reach (<= 3.5 blocks)
-        AttackCycle --> CooldownWait : Swing weapon
-        CooldownWait --> Reposition : Wait for attack meter (0.6s)
-        Reposition --> AttackCycle : Strafe & re-strike
+    state Construction {
+        [*] --> Foundation
+        Foundation --> Framing
+        Framing --> Walls
+        Walls --> Roof
+        Roof --> Interior
     }
 
-    Engage --> TargetAssessment : Health dropped < 6 HP or target down
-    Retreat --> ConsumeHealing : Eat golden apple / potion
-    ConsumeHealing --> ThreatDetected : Health restored
-    TargetAssessment --> Patrol : Target defeated or escaped
+    Construction --> Verification : Layer complete
+    Verification --> Construction : Next layer
+    Verification --> DefectDetected : Mismatch found
+    DefectDetected --> Repair : Run repair_structure
+    Repair --> Verification : Fixed
+    Verification --> Completed : 100% match
+    Completed --> [*]
 ```
-
-### Key Tactical Rules for Minecraft Java 26.2
-- **Weapon Cooldown Meter**: In Java Edition 1.9+, spamming attack clicks reduces weapon damage by up to 80%. The combat agent respects weapon recovery delay:
-  - Diamond / Netherite Sword: 0.625 seconds (1.6 attack speed).
-  - Axe: 1.0–1.25 seconds.
-- **Critical Hits**: Timing attacks while falling down from a jump inflicts 150% base damage.
-- **Shield Disabling**: If the target blocks with a shield, the agent switches to an axe to stun the shield for 5 seconds.
-- **Retreat Heuristic**: If agent health drops below `6.0` (3 hearts), it automatically disengages, executes `retreat(distance=15)`, equips food/potions, and consumes them before re-evaluating.
 
 ---
 
-## 4. Autonomous Sentry & Perimeter Defense Agent
+## 4. Structural Restoration & Repair Agent
 
-The Defense Agent safeguards a designated perimeter or player:
+The Structural Restoration Agent safeguards existing structures against natural or hostile damage (creeper craters, accidental breaks, water intrusion):
 
-1. **Perimeter Setup**: Establishes a home anchor $(X, Y, Z)$ and guard radius (e.g., $R = 20$ blocks).
-2. **Subscription Listener**: Monitors `minecraft://players/nearby` and `minecraft://mobs/nearby`.
-3. **Friend-or-Foe (IFF) Matrix**:
-   - Hostile Mobs (Creeper, Skeleton, Zombie): Immediate interception. Creepers are targeted with hit-and-backstep tactics to prevent detonation.
-   - Neutral Entities / Farm Animals: Ignored.
-   - Players: Checked against a whitelist. If not whitelisted, alerts owner or enters defensive stance.
-4. **Leash Enforcement**: If drawn more than $1.5 \times R$ away during pursuit, the agent disengages and navigates back to perimeter center.
+1. **Periodic Audit**: Reads known structures from `minecraft://world/map`.
+2. **Ground-Truth Scan**: Samples active coordinates via `get_block` / `get_blocks`.
+3. **Discrepancy Identification**: Identifies missing blocks or unwanted debris.
+4. **Targeted Patching**: Invokes `repair_structure` to clear obstacles and replace missing blocks with designated materials.
+5. **Re-Verification**: Confirms 100% structural fidelity.
 
 ---
 

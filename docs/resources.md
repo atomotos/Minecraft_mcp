@@ -23,12 +23,12 @@ With the **Fabric Mod Bridge (Option 2)**, resources are sourced directly from M
 | `minecraft://entities/nearby` | Yes | `GET /api/entities/nearby` (`getOtherEntities()`) | 1 Hz |
 | `minecraft://players/nearby` | Yes | `GET /api/entities/nearby?type=player` | 2 Hz |
 | `minecraft://mobs/nearby` | Yes | `GET /api/entities/nearby?type=mob` | 2 Hz |
-| `minecraft://knowledge/blocks` | No | Local static knowledge cache | Static |
-| `minecraft://knowledge/items` | No | Local static knowledge cache | Static |
-| `minecraft://knowledge/recipes` | No | Local static knowledge cache | Static |
-| `minecraft://knowledge/building` | No | Local static knowledge cache | Static |
-| `minecraft://knowledge/combat` | No | Local static knowledge cache | Static |
-| `minecraft://agent/current_plan` | Yes | Memory state cache in Python MCP server | On Update |
+| `minecraft://world/map` | Yes | In-memory spatial world model & cartography | Real-time |
+| `minecraft://construction/current` | Yes | Active construction project state & progress | On Change |
+| `minecraft://knowledge/blocks` | No | Block schema, solid/transparent properties, uses | Static / Cached |
+| `minecraft://knowledge/materials` | No | Material palettes and architectural groupings | Static / Cached |
+| `minecraft://knowledge/architecture` | No | Blueprint templates and structural recipes | Static / Cached |
+| `minecraft://agent/plan` | Yes | Active architectural plan & component sequencing | On Update |
 
 ---
 
@@ -252,40 +252,30 @@ Static resources prevent the LLM from hallucinating crafting recipes, item value
 }
 ```
 
-### `minecraft://knowledge/combat`
+### `minecraft://knowledge/architecture`
 ```json
 {
-  "attack_cooldowns": {
-    "minecraft:diamond_sword": 0.625,
-    "minecraft:iron_sword": 0.625,
-    "minecraft:diamond_axe": 1.0,
-    "minecraft:iron_axe": 1.11
-  },
-  "reach_distance": 3.0,
-  "critical_hit_multiplier": 1.5,
-  "shield_disable_seconds": 5.0
+  "templates": ["watchtower", "stone_bridge", "curtain_wall", "oak_cabin", "wheat_farm", "pillared_temple"],
+  "styles": ["medieval_stone", "timber_frame", "desert_sandstone", "modern_minimal"],
+  "component_types": ["foundation", "floor", "wall", "pillar", "roof", "opening", "interior", "trim"]
 }
 ```
 
 ---
 
-## 7. Dynamic Agent Memory: `minecraft://agent/current_plan`
+## 7. Dynamic Agent Plan: `minecraft://agent/plan`
 
-Maintains the active cognitive plan across tool calls:
+Maintains the active architectural blueprint and execution plan:
 ```json
 {
-  "task": "build_oak_house",
-  "status": "in_progress",
-  "origin": [100, 65, 200],
-  "dimensions": {"width": 9, "depth": 7, "height": 5},
-  "materials": {
-    "foundation": "minecraft:cobblestone",
-    "walls": "minecraft:oak_planks",
-    "roof": "minecraft:oak_stairs"
-  },
-  "completed": ["site_survey", "foundation", "floor"],
-  "current_stage": "walls",
-  "remaining": ["doors_and_windows", "roof", "lighting"]
+  "project_id": "proj_watchtower_01",
+  "structure_type": "tower",
+  "blueprint_id": "watchtower",
+  "status": "BUILDING",
+  "anchor": [-240, 64, 140],
+  "current_component": "walls",
+  "completed_components": ["foundation", "floor"],
+  "remaining_components": ["walls", "battlements", "roof", "interior"]
 }
 ```
-Client agents can update this resource using the internal state engine during task execution.
+Client agents can monitor and update this resource using the architectural engine during task execution.

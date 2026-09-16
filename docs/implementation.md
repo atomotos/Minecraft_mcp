@@ -14,8 +14,8 @@ The goal is to build an advanced Minecraft Java Edition MCP Server allowing an L
 3. **Build** intricate structures (such as houses) via structured blueprints and batch operations.
 4. **Inspect** player state, inventory, and material availability.
 5. **Interact** with living entities and mobs.
-6. **Engage** hostile players and mobs with tactical combat mechanics when instructed.
-7. **Execute** high-level construction and combat plans.
+6. **Plan & Compile** generic architectural structures via structured blueprints (houses, towers, bridges, walls, castles, farms, temples, custom).
+7. **Verify & Repair** structures comparing planned vs. actual ground-truth world state.
 
 > [!IMPORTANT]
 > **The MCP server is an agent capability layer, NOT merely a wrapper around Minecraft commands.**
@@ -52,7 +52,7 @@ Implementation code must strictly adhere to the following layer hierarchy:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │             Layer 6: High-Level Agent Operations            │
-│         (build_house, combat_engage, defend_perimeter)      │
+│  (build_structure, build_wall, build_roof, repair_structure)│
 └──────────────────────────────┬──────────────────────────────┘
                                │ Calls high-level tools & primitives
                                ▼
@@ -71,7 +71,7 @@ Implementation code must strictly adhere to the following layer hierarchy:
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │         Layer 3: Transport Bridge (Localhost HTTP/WS)       │
-│             (http://127.0.0.1:8080 & ws://.../ws/events)    │
+│      (http://127.0.0.1:25585 & ws://.../api/v1/ws/player)  │
 └──────────────────────────────┬──────────────────────────────┘
                                │ Dispatches requests to mod endpoints
                                ▼
@@ -115,64 +115,33 @@ Development **must** proceed strictly in sequence. No phase may be started until
 
 ```mermaid
 flowchart TD
-    P1["Phase 1: Connectivity\n(get_server_status)"] --> P2["Phase 2: Observation Primitives\n(get_player_state, inspect_area, inventory)"]
-    P2 --> P3["Phase 3: Safe / Action Primitives\n(equip_item, look_at, use_item)"]
-    P3 --> P4["Phase 4: Building Primitives\n(place_block, place_blocks, break_blocks, fill_region)"]
-    P4 --> P5["Phase 5: Navigation\n(move_to, 3D pathfinding state)"]
-    P5 --> P6["Phase 6: Combat\n(combat_engage, weapon cooldown, retreat)"]
-    P6 --> P7["Phase 7: High-Level Agents\n(build_house, defend_perimeter, blueprint compiler)"]
+    P1["Phase 1: Observation & World State Stack\n(Netty Bridge, Vitals, Blocks, WebSocket, explore_area)"] --> P2["Phase 2: World Mutation & Player Actions\n(place_block, place_blocks, fill, interact, move_to, stop)"]
+    P2 --> P3["Phase 3: Spatial Intelligence & Architectural Construction\n(Blueprints, Construction Engine, Resources, 3D Navigation, Repair)"]
 ```
 
 ### Phase Details
 
-#### Phase 1: Connectivity (Gatekeeper)
-- Implement `get_server_status()` first.
-- Verifies Python $\rightarrow$ Fabric Mod (`GET /api/status`) $\rightarrow$ Minecraft server connectivity.
-- Returns structured JSON:
-  ```json
-  {
-    "connected": true,
-    "minecraft_version": "26.2",
-    "fabric_loader_version": "0.16.x",
-    "player_count": 1,
-    "players": ["Steve"],
-    "tps": 20.0,
-    "mspt": 12.4
-  }
-  ```
-- **Do not proceed to Phase 2 until this works against a live Fabric server.**
+#### Phase 1: Observation & World State Stack (Completed & Verified)
+- Embedded Netty server (:25585), thread-safe tick dispatch via `TickSchedulerService`.
+- Tools: `get_server_status`, `get_player_state`, `switch_game_mode`, `get_player_position`, `get_inventory`, `get_block`, `inspect_area`, `get_nearby_entities`, `get_world_info`.
+- Dynamic resources: `minecraft://player/position`, `minecraft://player/inventory`, `minecraft://world`, `minecraft://entities/nearby`.
+- Prompt: `explore_area`.
+- Verified passing 20/20 tests in `scripts/test_phase1_client.py`.
 
-#### Phase 2: Observation Primitives
-- Implement:
-  - `get_player_state(player_name)` $\rightarrow$ `GET /api/player/{name}`
-  - `get_inventory(player_name)` $\rightarrow$ `GET /api/player/{name}/inventory`
-  - `get_block(x, y, z)` $\rightarrow$ `GET /api/world/block`
-  - `inspect_area(center, radius, format)` $\rightarrow$ `POST /api/world/inspect`
-  - `get_nearby_entities(radius)` $\rightarrow$ `GET /api/entities/nearby`
-  - `get_nearby_players(radius)` $\rightarrow$ `GET /api/entities/nearby?type=player`
-- Must return compact, structured, LLM-friendly schemas.
-- **Never dump unrestricted world data.**
+#### Phase 2: World Mutation, Player Actions & Direct Building (Completed & Verified)
+- Closed-loop OBSERVE $\rightarrow$ ACT $\rightarrow$ VERIFY pattern returning typed `StructuredActionResult`.
+- Tools: `place_block`, `place_blocks`, `break_block`, `fill_region`, `interact_with_block`, `move_to`, `stop_movement`, `teleport`, `look_at`, `select_slot`, `use_item`, `drop_item`, `swing_arm`.
+- Dynamic resource: `minecraft://action/state`.
+- Verified passing 12/12 tests in `scripts/test_phase2_client.py`.
 
-#### Phase 3: Safe / Action Primitives
-- Implement `equip_item`, `look_at`, `use_item`, `drop_item`, `craft_item`.
-
-#### Phase 4: Building Primitives
-- Implement `place_block`, `place_blocks` (batched), `break_block`, `break_blocks`, `fill_region`.
-- Interacts with `POST /api/world/blocks/place` and `POST /api/world/fill`.
-- Must validate construction plans before execution.
-
-#### Phase 5: Navigation
-- Implement `move_to(destination, speed, tolerance)`.
-- Navigation subsystem handles A* pathing, step jumping, and obstacle avoidance.
-- Must return detailed status: `"success"`, `"blocked"`, `"unreachable"`, `"timeout"`, or `"cancelled"`.
-
-#### Phase 6: Combat
-- Implement `attack_entity`, `defend`, `retreat`, `combat_engage`.
-- Strictly respect Java 1.9+ attack cooldowns, distance checks, and health retreat thresholds.
-
-#### Phase 7: High-Level Agents & Blueprints
-- Implement `find_build_location`, `build_house`, `build_wall`, `build_floor`, `build_roof`, `build_door`, `build_window`, `defend_perimeter`.
-- Must compose verified lower-level primitives.
+#### Phase 3: Spatial Intelligence, Architectural Planning & Autonomous Construction
+- Spatial World Model (`minecraft://world/map`), flatness analysis (`find_build_location`), landmarks (`mark_location`, `get_landmarks`).
+- Generic blueprint compiler (`build_structure`) supporting towers, bridges, walls, houses, castles, farms, temples, custom.
+- Semantic components: `build_wall`, `build_roof`, `build_foundation`, `build_pillar`, `build_room`.
+- Resource Manager: bill-of-materials, deficit calculation, crafting recovery, `WAITING_FOR_RESOURCES`.
+- 3D A* navigation: voxel walkability, steps, drops, dynamic obstacle avoidance (`navigate_to`).
+- Closed-loop verification & repair: ground-truth inspection and restoration (`repair_structure`).
+- Event aggregator and dynamic plan resource (`minecraft://agent/plan`, `minecraft://construction/current`).
 
 ---
 
@@ -251,13 +220,14 @@ Only after Vertical Slice 1 is 100% green should the next primitive be built.
   ```
 - If blocked, return `"status": "blocked"` with details. Never pretend movement succeeded.
 
-### Combat
-- Never assume an enemy player or mob target exists.
+### Architectural Construction & Verification
+- The LLM decides **WHAT** to build and selects/generates the blueprint.
+- The Architectural Planner compiles blueprints into sequenced, deterministic construction steps.
+- The Resource Manager verifies inventory availability and plans crafting recovery before mutating blocks.
 - Agent loop:
-  $$\text{Observe} \longrightarrow \text{Identify} \longrightarrow \text{Inspect Target} \longrightarrow \text{Decide} \longrightarrow \text{Approach} \longrightarrow \text{Engage} \longrightarrow \text{Observe Again}$$
-- **Do not claim a kill unless Minecraft actually reports the entity death.**
-- Enforce weapon cooldown: respect Java 1.9+ attack speed (e.g., 0.625s delay for diamond swords).
-- Enforce retreat threshold: if health drops below `6.0` HP (3 hearts), disengage immediately.
+  $$\text{Observe} \longrightarrow \text{Blueprint} \longrightarrow \text{Resource Check} \longrightarrow \text{Act (Batch Layers)} \longrightarrow \text{Verify} \longrightarrow \text{Repair / Complete}$$
+- **Do not assume a structure is complete without ground-truth verification.**
+- Enforce batch safety limit: $\le 500$ blocks per call.
 
 ---
 
@@ -270,7 +240,6 @@ These limits must be hard-coded in Python configuration models:
 | Max Blocks per Operation | 500 blocks | 2,000 blocks | `MAX_BLOCKS_PER_BATCH` |
 | Max Area Radius | 8 blocks | 16 blocks | `MAX_INSPECT_RADIUS` |
 | Max Navigation Distance | 64 blocks | 128 blocks | `MAX_NAVIGATE_DISTANCE` |
-| Max Combat Reach Distance | 3.5 blocks | 4.0 blocks | `MAX_COMBAT_REACH` |
 | HTTP Execution Timeout | 5.0 seconds | 15.0 seconds | `COMMAND_TIMEOUT_SEC` |
 | Navigation Timeout | 30.0 seconds | 60.0 seconds | `NAV_TIMEOUT_SEC` |
 | Allowed Dimensions | overworld | all | `ALLOWED_DIMENSIONS` |
@@ -283,13 +252,13 @@ Every tool must return structured, actionable errors. Never raise unhandled exce
 
 | Error Code | Trigger Condition | Actionable Remediation Tip |
 | :--- | :--- | :--- |
-| `NOT_CONNECTED` | Fabric bridge HTTP/WS connection lost | "Verify Fabric server launcher is running on port 8080." |
+| `NOT_CONNECTED` | Fabric bridge HTTP/WS connection lost | "Verify Fabric server launcher is running on port 25585." |
 | `PLAYER_NOT_FOUND` | Tracked player not in world | "Check player list using get_server_status()." |
 | `INVALID_POSITION` | Coordinates out of bounds / void | "Ensure Y coordinate is within -64 to 320." |
 | `BLOCK_NOT_FOUND` | Unknown block namespace ID | "Consult minecraft://knowledge/blocks for valid IDs." |
 | `INSUFFICIENT_MATERIALS` | Inventory lacks required blocks | "Gather missing materials listed in error details." |
 | `AREA_TOO_LARGE` | Requested radius > MAX_RADIUS | "Reduce radius to 16 blocks or fewer." |
-| `TARGET_NOT_FOUND` | Combat target not in range | "Re-scan area using get_nearby_players()." |
+| `INVALID_BLUEPRINT` | Blueprint definition malformed | "Verify blueprint components, dimensions, and materials." |
 | `PATH_NOT_FOUND` | Obstacle blocking all paths | "Inspect obstacle or clear path using break_blocks()." |
 | `ACTION_TIMEOUT` | Operation exceeded time budget | "Retry with shorter distance or smaller batch." |
 | `ACTION_REJECTED` | Safety boundary / protected zone | "Target location is protected or forbidden." |
@@ -299,7 +268,7 @@ Every tool must return structured, actionable errors. Never raise unhandled exce
 ## 12. Idempotency, Retries, and Timeouts (Rules 22 & 23)
 
 - **Read / Inspection Operations** (`inspect_area`, `get_player_state`, `get_inventory`): **Safe to retry**.
-- **Mutating Operations** (`place_blocks`, `break_blocks`, `attack_entity`): **Do NOT blindly retry**.
+- **Mutating Operations** (`place_blocks`, `break_blocks`, `build_structure`): **Do NOT blindly retry**.
   - Must check world state first before repeating.
 - **Strict Timeouts**: Every HTTP REST and WebSocket call must use an explicit client timeout (`timeout=5.0`). No thread may hang indefinitely.
 
@@ -311,17 +280,17 @@ The project requires 4 distinct test tiers:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 1. Unit Tests (pytest)                                      │
+│ 1. Unit Tests (pytest / unittest)                           │
 │    • Schema validation, blueprint compilation, A* algorithm │
 ├─────────────────────────────────────────────────────────────┤
-│ 2. MCP In-Process Tests (pytest-asyncio + MCP ClientSession)│
-│    • Client connects over in-memory pipe, calls tools       │
+│ 2. MCP In-Process Tests (stdio ClientSession)               │
+│    • Client connects over stdio pipe, calls tools           │
 ├─────────────────────────────────────────────────────────────┤
-│ 3. Fabric Bridge Tests (Mocked HTTP/WebSocket Server)       │
+│ 3. Fabric Bridge Tests (HTTP/WebSocket Client)              │
 │    • Tests HTTP payload generation and JSON response parsing│
 ├─────────────────────────────────────────────────────────────┤
 │ 4. Live Minecraft Smoke Tests (Fabric Server Launcher)      │
-│    • End-to-end verification against localhost:8080 (MC 26.2)│
+│    • End-to-end verification against localhost:25585 (MC 26)│
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -350,9 +319,9 @@ V1 is complete when an LLM connected over `stdio` can reliably execute:
 - [ ] **5. Inspect Inventory**: Check item quantities with `get_inventory()`.
 - [ ] **6. Site Selection**: Run `find_build_location()` and locate flat ground.
 - [ ] **7. Batch Placement**: Place a validated batch of blocks via `place_blocks()` using Fabric World API.
-- [ ] **8. Build House**: Autonomously construct a small oak house via `build_house()`.
+- [ ] **8. Build Structure**: Autonomously compile and construct a structure from a blueprint via `build_structure()`.
 - [ ] **9. Scan Players**: Locate nearby players with `get_nearby_players()`.
-- [ ] **10. Navigate**: Move autonomously towards coordinates using `navigate_to()`.
-- [ ] **11. Tactical Combat**: Engage a target entity with `combat_engage()` respecting attack cooldown.
+- [ ] **10. Navigate**: Move autonomously towards coordinates using 3D pathfinding via `navigate_to()`.
+- [ ] **11. Verification & Repair**: Physically inspect completed structure and autonomously repair defects via `repair_structure()`.
 - [ ] **12. Structured Feedback**: Receive clear structured success/error responses on every call.
 - [ ] **13. Real Server Verification**: All 12 items above verified against a live Minecraft Java 26.2 server running on the Fabric Server Launcher.

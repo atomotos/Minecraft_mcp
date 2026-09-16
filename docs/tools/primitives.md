@@ -2,9 +2,9 @@
 
 This document provides the complete, authoritative specification for all **Primitive MCP Tools** in the Minecraft Java Edition MCP Server 2.0.
 
-Primitive tools are the atomic, low-level building blocks exposed to the LLM. High-level composite tools (`build_house`, `combat_engage`, etc.) orchestrate these primitives to accomplish autonomous goals.
+Primitive tools are the atomic, low-level building blocks exposed to the LLM. High-level composite tools (`build_structure`, `build_wall`, etc.) orchestrate these primitives to accomplish autonomous goals.
 
-Under the hood, all primitive tools interact with the **Fabric Server-Side Mod Bridge** (`http://127.0.0.1:8080`) rather than slow, text-based RCON commands, enabling direct access to Minecraft World and Entity APIs.
+Under the hood, all primitive tools interact with the **Fabric Server-Side Mod Bridge** (`http://127.0.0.1:25585`) rather than slow, text-based RCON commands, enabling direct access to Minecraft World and Entity APIs.
 
 ---
 
@@ -34,11 +34,12 @@ Under the hood, all primitive tools interact with the **Fabric Server-Side Mod B
    - [`use_item`](#use_item)
    - [`drop_item`](#drop_item)
    - [`craft_item`](#craft_item)
-5. [Combat Primitives](#5-combat-primitives)
-   - [`attack_entity`](#attack_entity)
-   - [`defend`](#defend)
-   - [`retreat`](#retreat)
-   - [`track_entity`](#track_entity)
+5. [Spatial & Verification Primitives](#5-spatial--verification-primitives)
+   - [`scan_region`](#scan_region)
+   - [`mark_location`](#mark_location)
+   - [`get_landmarks`](#get_landmarks)
+   - [`check_requirements`](#check_requirements)
+   - [`repair_structure`](#repair_structure)
 6. [Server & Bridge Primitives](#6-server--bridge-primitives)
    - [`execute_command`](#execute_command)
 
@@ -507,40 +508,22 @@ Synthesizes a crafted item recipe via `POST /api/action/craft`.
 
 ---
 
-## 5. Combat Primitives
+## 5. Spatial & Verification Primitives
 
-### `attack_entity`
-Executes an attack swing against the target entity.
+### `scan_region`
+Scans a volume around a center coordinate and incorporates results into the persistent spatial world model (`minecraft://world/map`).
 
-#### Parameters
-| Parameter | Type | Required | Default | Description |
-| :--- | :--- | :---: | :--- | :--- |
-| `target_selector` | `string` | Yes | — | Entity ID, UUID, or name (e.g. `"Alex"` or `"zombie"`). |
-| `weapon` | `string` | No | `null` | Optional weapon to equip before striking. |
+### `mark_location`
+Records a point-of-interest or landmark in the spatial world model with category (`base`, `site`, `quarry`, `hazard`) and tags.
 
-#### Under the Hood (Fabric Mod Bridge)
-Calls `POST /api/action/attack` targeting the entity. The Fabric mod invokes `player.attack(targetEntity)`, respects the attack cooldown meter, and reports damage dealt.
+### `get_landmarks`
+Queries all user or agent registered landmarks from the spatial world model.
 
----
+### `check_requirements`
+Calculates required block quantities for an architectural blueprint and checks against player inventory.
 
-### `defend`
-Raises shield in offhand to absorb damage via `POST /api/action/shield`.
-
----
-
-### `retreat`
-Initiates tactical fallback away from threat.
-
-#### Parameters
-| Parameter | Type | Required | Default | Description |
-| :--- | :--- | :---: | :--- | :--- |
-| `distance` | `number` | No | `10.0` | Distance to retreat. |
-| `direction` | `string` | No | `"away_from_threat"` | `"away_from_threat"` or `"to_home_base"`. |
-
----
-
-### `track_entity`
-Locks orientation and camera continuously onto target entity.
+### `repair_structure`
+Performs ground-truth physical verification on a constructed structure, detects missing or broken blocks, and executes targeted repairs.
 
 ---
 

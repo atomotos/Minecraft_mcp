@@ -31,15 +31,16 @@ Rather than forcing the LLM to micromanage `/setblock`, `/fill`, or coordinate m
 │               │                             │               │
 │  ┌────────────▼─────────────────────────────▼────────────┐  │
 │  │              Capability & State Engine                │  │
-│  │  • Compact World Representation & Spatial Cache       │  │
-│  │  • Structure Blueprint Compiler                       │  │
-│  │  • Navigation / Path Planner                          │  │
-│  │  • Combat State Machine                               │  │
+│  │  • Spatial World Model & Flatness Analyzer            │  │
+│  │  • Multi-Structure Blueprint Compiler                 │  │
+│  │  • 3D A* Voxel Navigation                             │  │
+│  │  • Resource Manager & Crafting Recovery               │  │
+│  │  • Structure Verifier & Autonomous Repair             │  │
 │  │  • WebSocket Event Consumer (Client)                  │  │
 │  └────────────────────────────┬──────────────────────────┘  │
 └───────────────────────────────┼─────────────────────────────┘
                                 │
-                                │ Localhost HTTP & WebSocket (Port 8080)
+                                │ Localhost HTTP & WebSocket (Port 25585)
                                 │ (Asynchronous, Type-Safe JSON Payloads)
                                 ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -49,9 +50,9 @@ Rather than forcing the LLM to micromanage `/setblock`, `/fill`, or coordinate m
 │  • Direct Thread-Safe Dispatch to Server Tick Loop          │
 │  • Event Hooks: ServerTickEvents.END_SERVER_TICK            │
 │  • Server APIs:                                             │
-│    ├── World API (ServerWorld.getBlockState / setBlockState)│
-│    ├── Entity API (ServerPlayerEntity, health, inventory)   │
-│    └── Action & Combat API (navigation, attack cooldowns)   │
+│    ├── World API (WorldMutationService setBlock/fill/break) │
+│    ├── Entity API (ObservationService player/entities)      │
+│    └── Action API (PlayerActionService move/teleport/rotate)│
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                │ Direct In-Process Java Calls
@@ -367,8 +368,9 @@ To maintain thread and agent synchronization, operations follow a state model:
   - Basic waypoint movement (`move_to`, `stop_movement`, stuck detection).
   - Code-level safety validation (Y bounds [-64..320], batch limit $\le 500$, valid namespaces).
   - Action verification feedback and structured action results.
-- **Phase 3 (Autonomous ReAct Agents & Tactical Navigation)**:
-  - 3D A* voxel pathfinding with obstacle avoidance and dynamic jump routing.
-  - Tactical PvP/PvE combat engine (weapon cooldowns, retreat thresholds).
-  - High-level architectural blueprint compiler (`build_house`, `build_wall`, `build_roof`).
-  - Long-horizon autonomous ReAct agent loops.
+- **Phase 3 (Spatial Intelligence, Architectural Planning & Autonomous Construction)**:
+  - 3D A* voxel pathfinding with obstacle avoidance and dynamic jump routing (`navigate_to`).
+  - Persistent spatial world model (`minecraft://world/map`) and terrain flatness analyzer (`find_build_location`).
+  - Generic architectural blueprint compiler supporting diverse typologies (`build_structure`).
+  - Resource manager with bill-of-materials calculation and crafting recovery.
+  - Closed-loop physical verification and autonomous structure repair (`repair_structure`).

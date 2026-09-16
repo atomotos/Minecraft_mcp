@@ -4,7 +4,7 @@
 **Protocol Version**: MCP 2.0 Specification (`mcp>=2.2.0`, Python SDK v2 `MCPServer`, JSON-RPC 2.0 stdio)  
 **JVM Toolchain**: OpenJDK 25 | **Gradle**: 9.5.0 | **Python**: 3.14+ (`uv`)  
 **Bridge Address**: `http://127.0.0.1:25585/api/v1` | `ws://127.0.0.1:25585/api/v1/ws/player`  
-**Current Milestone**: **Phase 1 & Phase 2 Completed & Verified Live** | **Phase 3 Next (Combat, Navigation & Autonomous Blueprints)**
+**Current Milestone**: **Phase 1 & Phase 2 Completed & Verified Live** | **Phase 3 (Spatial Intelligence, Architectural Planning & Autonomous Construction)**
 
 ---
 
@@ -214,8 +214,8 @@ To maintain engineering rigor, the architectural division between Phase 2 and Ph
 | **World Mutation** | Single & batch block placement/breaking with pre-validation | Procedural architectural generation, structure blueprint compilers |
 | **Movement** | Basic waypoint/step movement (`move_to`, `stop_movement`, stuck detection) | Full 3D A* pathfinding, dynamic obstacle avoidance, drop-down jumping |
 | **Block Interaction** | Generic interaction primitive (`interact_with_block`) | Multi-step crafting pipelines, automated smelting, container sorting |
-| **Combat** | Not in scope | Weapon cooldown timing, line-of-sight tracking, tactical retreat loops |
-| **Agent Autonomy** | Atomic tool execution with verified results | Autonomous long-horizon ReAct agents (`build_house`, `defend_perimeter`) |
+| **Architectural Planning** | Single & batch block placement/breaking with pre-validation | Procedural architectural generation, multi-structure blueprint compilers |
+| **Agent Autonomy** | Atomic tool execution with verified results | Autonomous long-horizon architectural agents (`build_structure`, `repair_structure`) |
 
 ---
 
@@ -309,53 +309,64 @@ python scripts/test_phase2_client.py
 
 ---
 
-## Phase 3: Combat, 3D Navigation & Autonomous Construction (MCP 2.0)
+## Phase 3: Spatial Intelligence, Architectural Planning & Autonomous Construction (MCP 2.0)
 
 ### 3.1 Goal & Scope
-Deliver high-level autonomous agent capabilities: tactical melee combat with weapon cooldowns and retreat thresholds, full 3D A* navigation across uneven terrain, and autonomous blueprint compilation (e.g. building a complete house). Expose full MCP 2.0 prompt workflows (`build_house`, `defend_player`, `build_and_defend`).
+Transform the MCP server into an autonomous architectural agent capable of understanding, compiling, resourcing, constructing, verifying, and repairing large-scale structures across diverse typologies (houses, towers, bridges, walls, castles, roads, farms, monuments, temples, compounds, and custom user blueprints).
 
-### 3.2 Components Built
+Combat, enemy attacks, and weapon mechanics are strictly removed from Phase 3. The foundational abstraction is:
+$$\text{Architecture} \longrightarrow \text{Blueprint} \longrightarrow \text{Construction Plan} \longrightarrow \text{Resource Plan} \longrightarrow \text{Construction} \longrightarrow \text{Verification} \longrightarrow \text{Recovery / Repair} \longrightarrow \text{Completed Structure}$$
 
-#### A. Fabric Mod Bridge (`fabric-mod/src/main/java/com/minecraftmcp/`)
-- **Combat Controllers & Services**:
-  - `POST /api/v1/combat/attack`: Direct melee attack on entity ID, respecting weapon cooldowns.
-  - `GET /api/v1/combat/target`: Queries nearest valid hostile mob within reach ($3.5$ blocks) and line of sight.
+---
 
-#### B. Python MCP 2.0 Server (`src/minecraft_mcp/`)
-- **3D A\* Pathfinding Engine**:
-  - Voxel walkability grid, jump step calculations, fall damage avoidance, and collision bounding.
-  - `navigate_to(destination, speed, tolerance)`: High-level path follower with dynamic re-routing and obstacle checks.
-- **Tactical Combat System**:
-  - Weapon cooldown timing (e.g., 0.625s delay for diamond swords).
-  - Reach distance verification ($\le 3.5$ blocks).
-  - Health monitoring & emergency retreat threshold ($< 6.0$ HP / 3 hearts).
-  - MCP Tools:
-    - `attack_entity(target_id)`: Cooldown-synchronized melee strike.
-    - `combat_engage(target_id)`: Complete tactical loop (approach $\rightarrow$ strike $\rightarrow$ defend $\rightarrow$ retreat).
-    - `defend()`: Raises shield or blocks.
-    - `retreat(safe_distance)`: Disengages to safe perimeter.
-- **Autonomous Construction & Blueprints**:
-  - Blueprint schema & compiler (floor, walls, roof, door, windows).
-  - Pre-execution validation (inventory check, collision safety, bounds check).
-  - High-level MCP Tools:
-    - `find_build_location(radius, required_size)`: Finds flat site using terrain flatness score.
-    - `build_house(style, size, location)`: Layer-by-layer automated shelter construction.
-    - `build_wall(...)`, `build_roof(...)`, `build_door(...)`, `build_window(...)`, `defend_perimeter(...)`.
-- **MCP 2.0 Resources**:
-  - `minecraft://agent/current_plan`: Current active blueprint or combat task state.
-  - `minecraft://knowledge/building`: Blueprint templates and structural recipes.
-  - `minecraft://knowledge/combat`: Weapon attack speeds, damage metrics, and mob reach tables.
-- **MCP 2.0 Prompts**:
-  - `build_house(location, style, size, materials)`: Full architectural construction prompt.
-  - `defend_player(protectee)`: Autonomous bodyguard sentry prompt.
-  - `build_and_defend(location, compound_size)`: Base foundation and defense prompt.
+### 3.2 Architectural System Components
+
+#### A. Spatial World Model (`minecraft://world/map`)
+- In-memory structured representation of the known Minecraft world.
+- Tracks player location, surveyed regions, explored bounding boxes, user landmarks, active/completed structures, resource deposits, and obstacles.
+- Tools: `find_build_location`, `scan_region`, `mark_location`, `get_landmarks`.
+
+#### B. Generic Architectural Blueprint System
+- Structured data describing architecture (not hard-coded Python classes).
+- Schema: identifier, name, structure type, 3D dimensions, palette mapping, ordered components (`foundation`, `floor`, `walls`, `pillars`, `roof`, `openings`, `interior`), constraints, and clearance specifications.
+- Predefined templates: `tower`, `bridge`, `wall`, `house`, `farm`, `temple`, `monument`, `road`, and arbitrary `custom` structures.
+- Blueprint compiler translates blueprints into deterministic `ConstructionPlan` steps.
+
+#### C. Semantic Component Layer & Construction Engine
+- High-level construction primitives compiling down to Phase 2 deterministic batch operations:
+  - `build_foundation`, `build_floor`, `build_wall`, `build_pillar`, `build_roof`, `build_doorway`, `build_window`, `build_room`.
+  - Generic `build_structure(blueprint, location, orientation, materials_override)`.
+- Enforces batch limits ($\le 500$ blocks) and chunk availability before dispatching to Fabric bridge.
+
+#### D. Construction State & Progress Tracker (`minecraft://construction/current`)
+- Real-time lifecycle state: `PLANNED`, `VALIDATING`, `WAITING_FOR_RESOURCES`, `BUILDING`, `VERIFYING`, `RECOVERING`, `PAUSED`, `COMPLETED`, `FAILED`, `CANCELLED`.
+- Progress metrics: `completed_blocks`, `planned_blocks`, `percentage`, active component, failure logs, and verification history.
+
+#### E. Resource Manager & Acquisition Recovery
+- Requirement calculation: compares blueprint bill-of-materials against player inventory (`get_inventory`).
+- Computes missing resource deficits and evaluates crafting recipes (e.g. logs $\rightarrow$ planks $\rightarrow$ stairs/slabs/doors).
+- If resources are unavailable, transitions to `WAITING_FOR_RESOURCES` with actionable reporting rather than failing silently.
+
+#### F. 3D Navigation & Path Planning (`navigate_to`)
+- Internal 3D A* voxel pathfinder navigating uneven terrain, 1-block steps, jump traversals, 3-block safe drops, and dynamic obstacle replanning.
+- Dispatches locomotion through Phase 2 `move_to` / `teleport`.
+
+#### G. Structure Verification & Autonomous Repair (`repair_structure`)
+- Closed-loop physical inspection: queries actual placed blocks against expected blueprint coordinates.
+- Discrepancy detection: pinpoints missing blocks, wrong materials, and intruding obstacles.
+- `repair_structure`: automatically generates targeted corrective operations to restore structural integrity.
+
+#### H. Event-Driven State Aggregation
+- State aggregator filters high-speed server ticks from WebSocket stream into discrete `AgentEvent`s (`ConstructionCompleted`, `ResourceShortage`, `PlayerStuck`, etc.).
+- LLM is only invoked on meaningful decision or replanning points.
+
+---
 
 ### 3.3 Real-Time Live Testing
 
 #### Server Preparation
 ```bash
 cd fabric-mod && ./gradlew runServer
-# Spawn test hostile mob: /summon zombie ~3 ~ ~ {NoAI:1b}
 ```
 
 #### Test Set A: Python MCP 2.0 Client Script (`scripts/test_phase3_client.py`)
@@ -363,22 +374,29 @@ cd fabric-mod && ./gradlew runServer
 source .venv/bin/activate
 python scripts/test_phase3_client.py
 ```
-**Verification Checks**:
-- [ ] Tests 3D A* pathfinding across a multi-block obstacle or elevation change.
-- [ ] Detects summoned zombie via `GET /api/v1/combat/target`.
-- [ ] Calls `attack_entity()` $\rightarrow$ verifies damage dealt, target health decreased, and attack cooldown respected.
-- [ ] Executes a minimal house blueprint $\rightarrow$ verifies layers are built sequentially and cleanly.
+**Verification Checks (12 Core Tests)**:
+- [ ] **1. Blueprint Compilation**: Validates and compiles multiple structure types (tower, bridge, wall, house, custom).
+- [ ] **2. Plan Generation**: Sequences ordered construction steps with coordinate offsets and block states.
+- [ ] **3. Resource Calculation**: Computes accurate bill-of-materials and identifies inventory deficits.
+- [ ] **4. Crafting Recovery**: Resolves craftable items from basic raw materials.
+- [ ] **5. Spatial Site Selection**: Calls `find_build_location` and scores terrain flatness.
+- [ ] **6. Spatial World Model**: Inspects `minecraft://world/map`, marks landmarks, and records structures.
+- [ ] **7. Semantic Component Building**: Executes `build_wall` with battlements and `build_roof`.
+- [ ] **8. Generic Construction**: Invokes `build_structure` to build an authentic structure from a generic blueprint.
+- [ ] **9. Real-Time Progress Tracking**: Subscribes to `minecraft://construction/current` and monitors percentage completion.
+- [ ] **10. Structure Verification**: Compares physical world against blueprint plan, reporting 100% match.
+- [ ] **11. Fault Injection & Repair**: Breaks structure blocks, calls `repair_structure`, and verifies restoration.
+- [ ] **12. Regression Safety**: Confirms all Phase 1 (20 tests) and Phase 2 (12 tests) continue to pass.
 
 #### Test Set B: Antigravity MCP Integration
 1. Ensure MCP server configuration is active in Antigravity.
 2. Prompt Antigravity in chat:
-   > *"Find a flat spot nearby, navigate there, build a complete small oak wooden house with a door, and defend against any monster that approaches."*
+   > *"Find a flat spot nearby, navigate there, plan and build a watchtower with battlements and an oak doorway, verify the structure, and report progress."*
 3. **Verification Checks**:
-   - [ ] Antigravity executes `find_build_location`, surveys terrain flatness.
-   - [ ] Antigravity navigates to the selected site.
-   - [ ] Antigravity places foundation, walls, doorway, and roof using high-level building primitives.
-   - [ ] If a hostile entity comes within range, Antigravity engages or defends.
-   - [ ] User confirms a fully standing, walk-in house exists in the live Minecraft world.
+   - [ ] Antigravity executes `find_build_location` and selects a construction site.
+   - [ ] Antigravity checks resource requirements against inventory.
+   - [ ] Antigravity compiles the blueprint and calls `build_structure`.
+   - [ ] Antigravity verifies completed blocks and confirms structural integrity.
 
 ---
 
@@ -388,4 +406,4 @@ python scripts/test_phase3_client.py
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | Netty Bridge, Observation Tools, Dynamic Resources (`minecraft://...`), Prompt (`explore_area`) | `scripts/test_phase1_client.py` (Vitals, inventory, blocks, WS) | Prompt: Inspect player state & survey terrain |
 | **Phase 2** | World Mutation, Player Actions, Generic Block Interaction, Basic Movement & Action Verification | `scripts/test_phase2_client.py` (12-point suite: place, break, batch, movement, stop, interact, structured results, verification, safety) | Prompt: Observe → Act → Verify (place 3x3 platform, verify, break center, verify opening) |
-| **Phase 3** | Combat, Navigation, Blueprints, Agent Prompts (`build_house`, `defend_player`) | `scripts/test_phase3_client.py` (A* pathing, combat strikes, house build) | Prompt: Autonomous navigation, full house build & defense |
+| **Phase 3** | Blueprints, Construction Engine, Resource Manager, 3D Navigation, Verification & Repair | `scripts/test_phase3_client.py` (12-point suite: blueprints, planning, resources, site search, build, verify, repair) | Prompt: Autonomous site finding, generic structure build, verification & progress report |

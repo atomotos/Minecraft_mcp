@@ -387,3 +387,9 @@ To maintain thread and agent synchronization, operations follow a state model:
   - Generic architectural blueprint compiler supporting diverse typologies (`build_structure`).
   - Resource manager with bill-of-materials calculation and crafting recovery.
   - Closed-loop physical verification and autonomous structure repair (`repair_structure`).
+
+---
+
+## 9. Further Reading & Execution Deep-Dive
+- **MCP Protocol vs. Direct Codebase Execution**: For an exhaustive analysis of how AI agents trigger high-level construction via MCP vs. direct Python script orchestration, see [`docs/architecture/mcp-vs-codebase-execution.md`](file:///Users/arhamowais/minecraft-mcp/docs/architecture/mcp-vs-codebase-execution.md).
+

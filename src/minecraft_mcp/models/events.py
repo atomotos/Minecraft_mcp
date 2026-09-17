@@ -20,3 +20,4 @@ class AgentEvent(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc).isoformat())
     payload: Dict[str, Any] = Field(default_factory=dict)
     requires_decision: bool = False
+

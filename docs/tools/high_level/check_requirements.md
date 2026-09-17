@@ -57,3 +57,4 @@ Before commencing construction, an autonomous agent must confirm whether it poss
   "status": "SUFFICIENT"
 }
 ```
+

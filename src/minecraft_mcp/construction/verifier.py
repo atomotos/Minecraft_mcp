@@ -37,39 +37,41 @@ class StructureVerifier:
         b_min = plan.bounds["min"]
         b_max = plan.bounds["max"]
 
-        # Ensure volume <= 32,768 for scanning
-        vol = (b_max["x"] - b_min["x"] + 1) * (b_max["y"] - b_min["y"] + 1) * (b_max["z"] - b_min["z"] + 1)
-        
+        dx = b_max["x"] - b_min["x"] + 1
+        dy = b_max["y"] - b_min["y"] + 1
+        dz = b_max["z"] - b_min["z"] + 1
+
         world_voxels: Dict[Tuple[int, int, int], Tuple[str, str]] = {}
 
-        if vol <= 32768:
-            try:
+        # Max sub-scan volume is 25,000 to stay safely below the 32,768 bridge limit
+        max_sub_vol = 25000
+        z_chunk_size = max(1, max_sub_vol // max(1, dx * dy))
+
+        try:
+            for cz1 in range(b_min["z"], b_max["z"] + 1, z_chunk_size):
+                cz2 = min(b_max["z"], cz1 + z_chunk_size - 1)
                 area = await self.client.get_blocks(
                     min_x=b_min["x"],
                     min_y=b_min["y"],
-                    min_z=b_min["z"],
+                    min_z=cz1,
                     max_x=b_max["x"],
                     max_y=b_max["y"],
-                    max_z=b_max["z"],
+                    max_z=cz2,
                     include_air=False,
                 )
                 for b in area.blocks:
                     world_voxels[(b.pos["x"], b.pos["y"], b.pos["z"])] = (b.id.lower(), b.state.lower())
-            except Exception as e:
-                logger.error("Failed to query block area for verification", error=str(e))
-                return {
-                    "valid": False,
-                    "error": f"Failed to query blocks for verification: {str(e)}",
-                    "total_planned": len(plan.steps),
-                    "verified_count": 0,
-                    "discrepancies_count": len(plan.steps),
-                    "completion_percentage": 0.0,
-                    "discrepancies": [],
-                }
-        else:
-            # For massive structures, sample or batch query
-            # For now query each step or smaller slices if needed
-            logger.warning("Large plan volume exceeds single scan limit", volume=vol)
+        except Exception as e:
+            logger.error("Failed to query block area for verification", error=str(e))
+            return {
+                "valid": False,
+                "error": f"Failed to query blocks for verification: {str(e)}",
+                "total_planned": len(plan.steps),
+                "verified_count": 0,
+                "discrepancies_count": len(plan.steps),
+                "completion_percentage": 0.0,
+                "discrepancies": [],
+            }
 
         verified_count = 0
         discrepancies: List[Dict[str, Any]] = []
@@ -96,13 +98,17 @@ class StructureVerifier:
                     })
             else:
                 # Omitted from non-air scan => world block is air or ungenerated
-                discrepancies.append({
-                    "pos": {"x": step.x, "y": step.y, "z": step.z},
-                    "component": step.component_name,
-                    "expected": expected_full,
-                    "actual": "minecraft:air",
-                    "type": "MISSING",
-                })
+                if expected_base in ("minecraft:air", "minecraft:cave_air", "minecraft:void_air"):
+                    # The planned step was to carve air (e.g. arch opening, doorway)
+                    verified_count += 1
+                else:
+                    discrepancies.append({
+                        "pos": {"x": step.x, "y": step.y, "z": step.z},
+                        "component": step.component_name,
+                        "expected": expected_full,
+                        "actual": "minecraft:air",
+                        "type": "MISSING",
+                    })
 
         total_steps = len(plan.steps)
         completion_pct = round((verified_count / max(1, total_steps)) * 100.0, 1)
@@ -114,6 +120,7 @@ class StructureVerifier:
             "verified_count": verified_count,
             "discrepancies_count": len(discrepancies),
             "completion_percentage": completion_pct,
-            "discrepancies": discrepancies[:50],
+            "discrepancies": discrepancies,
             "verified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         }
+

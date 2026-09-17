@@ -2,6 +2,7 @@
 
 **Project**: Autonomous Minecraft Java Edition MCP Server  
 **Target Environment**: Minecraft Java Edition `26.2`  
+**Current Status**: **Phase 1 & Phase 2 Completed & Verified Live** | Ready for **Phase 3: Combat, 3D Navigation & Autonomous Construction**  
 **Current Status**: **Phase 1, Phase 2 & Phase 3 Completed & Verified Live** (44/44 Tests Passing)  
 **Last Updated**: September 2026
 
@@ -113,8 +114,14 @@ This project builds an autonomous Model Context Protocol (MCP) server for Minecr
 
 ---
 
+## 5. Next Phase: Phase 3 Roadmap (Combat, 3D Navigation & Autonomous Construction)
 ## 5. Phase 3: Spatial Intelligence, Architectural Planning & Autonomous Construction (COMPLETED & VERIFIED)
 
+The next session will implement **Phase 3: Tactical Combat, 3D A* Navigation & Autonomous Blueprints**:
+- **Tactical Combat**: Melee attack primitives respecting weapon cooldowns (0.625s), reach checks ($\le 3.5$), and retreat thresholds ($< 6.0$ HP).
+- **3D A\* Navigation**: Voxel pathfinding engine navigating slopes, stair stepping, jump traversals, and dynamic obstacles.
+- **Autonomous Construction**: Layer-by-layer architectural blueprint compiler (`build_house`, `build_wall`, `build_roof`, `find_build_location`).
+- **Autonomous Workflows**: Agent prompt templates `build_house`, `defend_player`, `build_and_defend`.
 Phase 3 transforms the server into an autonomous architectural construction system:
 - **Generic Architectural Blueprints**: Multi-structure blueprint compiler (`build_structure`) supporting towers, bridges, walls, houses, castles, farms, temples, and custom designs.
 - **Semantic Structural Primitives**: High-level building primitives (`build_wall`, `build_roof`, `build_foundation`, `build_pillar`).

@@ -174,3 +174,4 @@ class ConstructionEngine:
                     self.last_completed_project = project.model_copy()
 
         return project
+

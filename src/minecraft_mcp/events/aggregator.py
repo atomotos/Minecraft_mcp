@@ -101,3 +101,4 @@ class EventAggregator:
         with self._lock:
             self._events.clear()
             self._last_position = None
+

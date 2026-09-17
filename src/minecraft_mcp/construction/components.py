@@ -206,3 +206,4 @@ def build_window_blocks(
             else:
                 blocks.append({"x": start_x, "y": cy, "z": start_z + w, "block": glass_material})
     return blocks
+

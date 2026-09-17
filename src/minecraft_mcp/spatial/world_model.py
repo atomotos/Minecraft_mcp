@@ -125,3 +125,4 @@ class SpatialWorldModelManager:
     def get_structures(self) -> List[StructureRecord]:
         with self._lock:
             return [s.model_copy() for s in self._model.structures]
+

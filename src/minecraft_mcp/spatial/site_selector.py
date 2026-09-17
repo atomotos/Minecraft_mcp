@@ -216,3 +216,4 @@ class SiteSelector:
             "candidates_evaluated": len(candidates),
             "top_candidates": candidates[:5],
         }
+

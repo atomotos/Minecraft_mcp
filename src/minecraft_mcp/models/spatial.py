@@ -41,3 +41,4 @@ class SpatialWorldModel(BaseModel):
     resource_locations: List[Dict[str, Any]] = Field(default_factory=list)
     known_obstacles: List[Dict[str, Any]] = Field(default_factory=list)
     last_updated: Optional[str] = None
+

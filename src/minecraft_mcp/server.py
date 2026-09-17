@@ -1,3 +1,4 @@
+from typing import Optional, List, Dict, Any
 from typing import Optional, List, Dict, Any, Union
 import json
 import structlog
@@ -43,6 +44,7 @@ client = BridgeClient()
 action_tracker = ActionStateTracker.get_instance()
 
 # ---------------------------------------------------------------------------
+# MCP 2.0 Tools (Observation Stack)
 # MCP 2.0 Tools (Observation Stack — Phase 1)
 # ---------------------------------------------------------------------------
 
@@ -134,6 +136,7 @@ async def inspect_area(center: List[int], radius: int = 8, format: str = "summar
         }
 
         if format == "ascii":
+            # Generate horizontal cross-section at center Y
             grid: List[str] = []
             block_map = {(b.pos["x"], b.pos["z"]): b.id for b in blocks if b.pos.get("y") == cy}
             for z in range(cz - radius, cz + radius + 1):
@@ -193,6 +196,7 @@ async def place_block(x: int, y: int, z: int, block: str) -> Dict[str, Any]:
     async with action_tracker.track("place_block", ActionStateEnum.BUILDING, target={"x": x, "y": y, "z": z, "block": valid_block}):
         try:
             res = await client.set_block(x, y, z, valid_block)
+            # Closed-loop verification
             verify_block = await client.get_block(x, y, z)
             expected_id = valid_block.split("[")[0]
             verified = (verify_block.blockId == expected_id) if verify_block.blockId else res.get("verified", False)
@@ -234,6 +238,7 @@ async def place_blocks(blocks: List[Dict[str, Any]]) -> Dict[str, Any]:
             except Exception:
                 failed_count += 1
 
+        # Closed-loop sample verification
         verified = True
         samples = [validated_blocks[0], validated_blocks[len(validated_blocks)//2], validated_blocks[-1]]
         for sample in samples:
@@ -870,3 +875,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

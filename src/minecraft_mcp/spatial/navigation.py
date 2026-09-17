@@ -336,3 +336,4 @@ class NavigationManager:
                     "success": False,
                     "error": f"Locomotion failed: {str(e)}",
                 }
+

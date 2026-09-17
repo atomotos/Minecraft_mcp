@@ -123,3 +123,4 @@ class RecoveryManager:
             "verification_after": verif_after,
             "status": "COMPLETED" if verif_after.get("valid", False) else "PARTIAL",
         }
+

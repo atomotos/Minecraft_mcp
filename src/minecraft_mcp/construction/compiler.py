@@ -20,6 +20,10 @@ from minecraft_mcp.construction.components import (
     build_doorway_blocks,
     build_window_blocks,
 )
+from minecraft_mcp.construction.taj_mahal import (
+    create_taj_mahal_blueprint,
+    generate_taj_mahal_steps,
+)
 
 # ---------------------------------------------------------------------------
 # Predefined Blueprint Templates
@@ -189,6 +193,8 @@ TEMPLATES: Dict[str, ArchitecturalBlueprint] = {
     "farm": create_wheat_farm_template(),
     "pillared_temple": create_pillared_temple_template(),
     "temple": create_pillared_temple_template(),
+    "taj_mahal": create_taj_mahal_blueprint(),
+    "taj": create_taj_mahal_blueprint(),
 }
 
 # ---------------------------------------------------------------------------
@@ -252,7 +258,9 @@ class BlueprintCompiler:
         all_steps: List[ConstructionStep] = []
 
         # Dispatch specialized compiler based on structure type
-        if blueprint.structure_type == StructureType.TOWER or blueprint.id in ("watchtower", "tower"):
+        if blueprint.id in ("taj_mahal", "taj") or blueprint.structure_type == StructureType.MONUMENT:
+            all_steps = generate_taj_mahal_steps(anchor, palette)
+        elif blueprint.structure_type == StructureType.TOWER or blueprint.id in ("watchtower", "tower"):
             all_steps = cls._compile_watchtower(anchor, w, d, h, palette)
         elif blueprint.structure_type == StructureType.BRIDGE or blueprint.id in ("stone_bridge", "bridge"):
             all_steps = cls._compile_bridge(anchor, w, d, h, palette)
@@ -274,6 +282,20 @@ class BlueprintCompiler:
             coord_map[(s.x, s.y, s.z)] = s
 
         deduped_steps = list(coord_map.values())
+
+        if deduped_steps:
+            bounds = {
+                "min": {
+                    "x": min(s.x for s in deduped_steps),
+                    "y": min(s.y for s in deduped_steps),
+                    "z": min(s.z for s in deduped_steps),
+                },
+                "max": {
+                    "x": max(s.x for s in deduped_steps),
+                    "y": max(s.y for s in deduped_steps),
+                    "z": max(s.z for s in deduped_steps),
+                },
+            }
 
         # Calculate materials required histogram
         materials_req: Dict[str, int] = {}
@@ -590,3 +612,4 @@ class BlueprintCompiler:
                             ))
 
         return steps
+

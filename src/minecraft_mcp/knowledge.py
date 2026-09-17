@@ -167,3 +167,4 @@ ARCHITECTURE_INFO = ArchitectureKnowledge(
         "interior",
     ],
 )
+

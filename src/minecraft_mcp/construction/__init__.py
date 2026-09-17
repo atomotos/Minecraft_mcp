@@ -20,6 +20,10 @@ from .recovery import (
     RecoveryManager,
     ConstructionFailureType,
 )
+from .taj_mahal import (
+    create_taj_mahal_blueprint,
+    generate_taj_mahal_steps,
+)
 
 __all__ = [
     "build_floor_blocks",
@@ -34,4 +38,7 @@ __all__ = [
     "StructureVerifier",
     "RecoveryManager",
     "ConstructionFailureType",
+    "create_taj_mahal_blueprint",
+    "generate_taj_mahal_steps",
 ]
+

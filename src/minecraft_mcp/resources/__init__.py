@@ -7,3 +7,4 @@ __all__ = [
     "ResourceManager",
     "DEFAULT_CRAFTING_RECIPES",
 ]
+

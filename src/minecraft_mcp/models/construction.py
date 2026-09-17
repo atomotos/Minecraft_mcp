@@ -58,3 +58,4 @@ class ConstructionProject(BaseModel):
     last_verified: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+

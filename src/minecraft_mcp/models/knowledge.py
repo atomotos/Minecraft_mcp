@@ -40,3 +40,4 @@ class ArchitectureKnowledge(BaseModel):
     templates: List[str] = Field(default_factory=list)
     styles: List[str] = Field(default_factory=list)
     component_types: List[str] = Field(default_factory=list)
+

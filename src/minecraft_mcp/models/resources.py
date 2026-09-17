@@ -26,3 +26,4 @@ class ResourceRequirement(BaseModel):
     craftable: bool = False
     crafting_plan: List[CraftingStep] = Field(default_factory=list)
     status: ResourceStatus = ResourceStatus.SUFFICIENT
+

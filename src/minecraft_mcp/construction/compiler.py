@@ -24,6 +24,10 @@ from minecraft_mcp.construction.taj_mahal import (
     create_taj_mahal_blueprint,
     generate_taj_mahal_steps,
 )
+from minecraft_mcp.construction.qutub_minar import (
+    create_qutub_minar_blueprint,
+    generate_qutub_minar_steps,
+)
 
 # ---------------------------------------------------------------------------
 # Predefined Blueprint Templates
@@ -195,6 +199,8 @@ TEMPLATES: Dict[str, ArchitecturalBlueprint] = {
     "temple": create_pillared_temple_template(),
     "taj_mahal": create_taj_mahal_blueprint(),
     "taj": create_taj_mahal_blueprint(),
+    "qutub_minar": create_qutub_minar_blueprint(),
+    "qutub": create_qutub_minar_blueprint(),
 }
 
 # ---------------------------------------------------------------------------
@@ -258,7 +264,9 @@ class BlueprintCompiler:
         all_steps: List[ConstructionStep] = []
 
         # Dispatch specialized compiler based on structure type
-        if blueprint.id in ("taj_mahal", "taj") or blueprint.structure_type == StructureType.MONUMENT:
+        if blueprint.id in ("qutub_minar", "qutub"):
+            all_steps = generate_qutub_minar_steps(anchor, palette)
+        elif blueprint.id in ("taj_mahal", "taj") or blueprint.structure_type == StructureType.MONUMENT:
             all_steps = generate_taj_mahal_steps(anchor, palette)
         elif blueprint.structure_type == StructureType.TOWER or blueprint.id in ("watchtower", "tower"):
             all_steps = cls._compile_watchtower(anchor, w, d, h, palette)

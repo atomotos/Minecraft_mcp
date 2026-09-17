@@ -24,6 +24,10 @@ from .taj_mahal import (
     create_taj_mahal_blueprint,
     generate_taj_mahal_steps,
 )
+from .qutub_minar import (
+    create_qutub_minar_blueprint,
+    generate_qutub_minar_steps,
+)
 
 __all__ = [
     "build_floor_blocks",
@@ -40,5 +44,7 @@ __all__ = [
     "ConstructionFailureType",
     "create_taj_mahal_blueprint",
     "generate_taj_mahal_steps",
+    "create_qutub_minar_blueprint",
+    "generate_qutub_minar_steps",
 ]
 

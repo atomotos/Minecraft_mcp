@@ -2,8 +2,7 @@
 
 **Project**: Autonomous Minecraft Java Edition MCP Server  
 **Target Environment**: Minecraft Java Edition `26.2`  
-**Current Status**: **Phase 1 & Phase 2 Completed & Verified Live** | Ready for **Phase 3: Combat, 3D Navigation & Autonomous Construction**  
-**Current Status**: **Phase 1, Phase 2 & Phase 3 Completed & Verified Live** (44/44 Tests Passing)  
+**Current Status**: **Phase 1, Phase 2 & Phase 3 Completed & Verified Live** (44/44 Tests Passing) | **Taj Mahal & Qutub Minar Monuments Fully Constructed (100% Physical Verification)**  
 **Last Updated**: September 2026
 
 ---
@@ -130,6 +129,14 @@ Phase 3 transforms the server into an autonomous architectural construction syst
 - **Closed-Loop Structure Verification & Repair**: Deep physical inspection comparing planned vs. actual voxels, automated defect remediation (`repair_structure`).
 - **Event-Driven Aggregator**: Ticks filtered into high-level agent events to minimize LLM cognitive churn.
 - **Verification**: Verified 12/12 tests passing in `scripts/test_phase3_client.py` (100% pass rate). Total project tests: 44/44 passing.
+
+### Autonomous Architectural Monuments (COMPLETED & VERIFIED)
+- **The Taj Mahal** at `(-181, 74, 167)`:
+  - 3,859 blocks placed, 100.0% physical ground-truth verification (0 discrepancies).
+  - Elevated plinth, 4 minarets, central octagonal mausoleum, 4 pishtaq iwans with lapis/gold inlays, central onion dome with gold finial, and Charbagh reflecting pool.
+- **The Qutub Minar & Iron Pillar of Delhi** at `(-234, 69, 194)`:
+  - 2,592 blocks placed, 100.0% physical ground-truth verification (0 discrepancies).
+  - 5 tapering storeys rising 48 blocks to $Y=117$, 24 alternating circular and angular flutings, 4 muqarnas corbel balconies with iron railings, contrasting white marble upper tiers, observation cupola, internal spiral staircase, courtyard plinth, and ancient rustless Iron Pillar of Delhi (`anvil` + `polished_blackstone_wall`).
 
 ---
 

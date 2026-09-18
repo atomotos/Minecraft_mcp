@@ -27,11 +27,13 @@ The project integrates Large Language Models (LLMs) and AI agents (such as Googl
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │             Python MCP 2.0 Server (`src/minecraft_mcp`)                │
-│  - MCP Tools (22): Observation, Mutation, Locomotion, Player Actions   │
-│  - MCP Resources (5): Real-time positions, world, inventory, actions   │
-│  - MCP Prompts (1): Structured workflows (e.g. `explore_area`)         │
+│  - MCP Tools (47): Procedural Engine, Multi-Agent Guild, Observation   │
+│  - MCP Resources (17): Blackboard, Roster, Progress, Scorecard, World  │
+│  - MCP Prompts (13): Lead Architect, Surveyor, Mason, Artisan, QA      │
+│  - Procedural Engine: Geometry IR, SDFs, 3D Greedy Cuboid Meshing      │
+│  - Multi-Agent Guild: Thread-Safe Blackboard, 3D Spatial Collision     │
 │  - Safety & Boundary Layer: Coordinate ($Y \in [-64, 320]$) & volume   │
-│  - Action Lifecycle Tracker: State machine (`IDLE`, `MOVING`, etc.)    │
+│  - Action Lifecycle Tracker: State machine (`IDLE`, `WORKING`, etc.)   │
 │  - Async Bridge Client: `httpx` (REST) & `websockets` (WS Stream)      │
 └───────────────────┬────────────────────────────────▲───────────────────┘
                HTTP │ REST (Commands & Queries)      │ WebSocket (Stream)

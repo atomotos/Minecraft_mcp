@@ -1,16 +1,16 @@
-# Minecraft Java Edition MCP Server 2.0 — 4-Phase Execution & Verification Plan
+# Minecraft Java Edition MCP Server 2.0 — 5-Phase Execution & Verification Plan
 
 **Target Environment**: Minecraft Java Edition `26.2` (Fabric Server Engine)  
 **Protocol Version**: MCP 2.0 Specification (`mcp>=2.2.0`, Python SDK v2 `MCPServer`, JSON-RPC 2.0 stdio)  
 **JVM Toolchain**: OpenJDK 25 | **Gradle**: 9.5.0 | **Python**: 3.14+ (`uv`)  
 **Bridge Address**: `http://127.0.0.1:25585/api/v1` | `ws://127.0.0.1:25585/api/v1/ws/player`  
-**Current Milestone**: **Phases 1, 2, 3 & 4 Completed & Verified Live** (56/56 Tests Passing) | **Taj Mahal, Qutub Minar & Roman Colosseum Monuments Fully Constructed (100% Physical Verification)**
+**Current Milestone**: **Phases 1, 2, 3 & 4 Completed & Verified Live** (56/56 Tests Passing) | **Taj Mahal, Qutub Minar & Roman Colosseum Monuments Fully Constructed (100% Physical Verification)** | **Phase 5 Active (Multi-Agent Architectural Orchestration, Procedural Templates & Subagent Prompt/Resource Pipelines)**
 
 ---
 
 ## 1. Plan Overview & Testing Architecture
 
-The entire project is structured into **4 Core Phases**, strictly adhering to bottom-up vertical slicing. Every phase incorporates the full spectrum of **MCP 2.0 primitives: Tools, Resources, and Prompts**.
+The entire project is structured into **5 Core Phases**, strictly adhering to bottom-up vertical slicing. Every phase incorporates the full spectrum of **MCP 2.0 primitives: Tools, Resources, and Prompts**.
 
 No phase is marked complete until it passes **two distinct sets of real-time tests** against a live Minecraft server instance:
 
@@ -683,7 +683,235 @@ python scripts/test_phase4_client.py
 
 ---
 
-## 5. Summary of Phase Gates
+## Phase 5: Multi-Agent Architectural Orchestration, Procedural Templates & Subagent Prompt/Resource Pipelines (ACTIVE)
+
+### 5.1 Architectural Assessment & The Multi-Agent Evolution
+
+```text
+CURRENT ARCHITECTURE (PHASE 4)
+- Highly optimized single-agent procedural construction engine.
+- Fast Geometry IR, continuous SDF voxelizer, 3D greedy cuboid meshing, and terrain-adaptive ground anchoring.
+- Token reduction > 1,000x; 13,286 blocks constructed in 18.77 seconds.
+
+CURRENT LIMITATIONS & BOTTLENECKS
+1. Monolithic Single-Agent Cognitive Overload:
+   A single LLM agent attempting to orchestrate an entire monumental complex (surveying site topography, framing heavy structural shells, carving intricate architectural detailing, and executing closed-loop QA repairs) suffers from role confusion and context saturation.
+2. Serial Execution Bottleneck:
+   Site preparation, heavy structural framing, decorative millwork, and quality inspection are forced into a sequential linear dialogue loop.
+3. Lack of Specialized Subagent Toolkits:
+   All 41 tools are currently presented to a single agent, increasing tool-selection ambiguity and cognitive churn.
+4. Absence of High-Level Architectural Templates (Prefabs):
+   While the Geometry IR supports primitives and booleans, multi-component architectural complexes (e.g. Gothic Cathedrals, Roman Amphitheaters, Mughal Minaret Complexes) require composable, parameter-driven templates accessible directly via MCP prompts and resources.
+
+PROPOSED PHASE 5 ARCHITECTURE: THE MULTI-AGENT ARCHITECTURAL GUILD
+In Phase 5, the MCP server transitions from a single-agent procedural builder to a Multi-Agent Architectural Guild orchestrated within our agenting platform (Antigravity).
+- Master Lead Architect (Parent Agent) acts as General Contractor.
+- Specialized Subagents are defined and invoked via Antigravity's `define_subagent` and `invoke_subagent` facilities.
+- MCP 2.0 Prompts act as structured multi-agent workflow launchpads and role instructions.
+- MCP 2.0 Resources act as a shared real-time Blackboard Memory across all subagents.
+- Procedural Architectural Templates serve as modular, parameter-driven construction building blocks.
+```
+
+```mermaid
+flowchart TD
+    User([User Prompt: "Build a Gothic Cathedral Complex"]) --> Lead[Lead Architect / Contractor]
+    
+    subgraph "MCP 2.0 Shared Blackboard Resources"
+        Roster[minecraft://orchestration/roster]
+        Blackboard[minecraft://orchestration/blackboard]
+        Templates[minecraft://geometry/templates]
+        Progress[minecraft://construction/progress]
+        Scorecard[minecraft://inspection/scorecard]
+    end
+
+    Lead <--> Blackboard
+    Lead <--> Templates
+    Lead <--> Roster
+
+    subgraph "Specialized Subagents (Antigravity Agenting Platform)"
+        Surveyor["1. Site Surveyor Subagent<br/>(Topography, Datum Y_base, Underpinning)"]
+        Mason["2. Structural Mason Subagent<br/>(Geometry IR, Arches, Vaults, Greedy Meshing)"]
+        Artisan["3. Artisan Carver Subagent<br/>(Tracery, Balustrades, Windows, Furnishings)"]
+        QA["4. QA Inspector Subagent<br/>(Compact Verification, Checksums, Auto-Repair)"]
+    end
+
+    Lead -- "invoke_subagent" --> Surveyor
+    Surveyor -- "Site Ready & Datum Y_base" --> Blackboard
+    
+    Lead -- "invoke_subagent" --> Mason
+    Mason -- "Reads Datum, Builds Shell" --> Blackboard
+    Mason -- "Fill Operations" --> Minecraft[(Minecraft 26.2 Engine)]
+    
+    Lead -- "invoke_subagent" --> Artisan
+    Artisan -- "Reads Shell Bounds, Details" --> Blackboard
+    Artisan -- "Detail Operations" --> Minecraft
+    
+    Lead -- "invoke_subagent" --> QA
+    QA -- "Samples, Verifies, Auto-Repairs" --> Minecraft
+    QA -- "Certifies 100% Integrity" --> Scorecard
+    
+    Scorecard --> Lead
+    Lead --> FinalReport([User: Build Certified & Landmark Marked])
+```
+
+---
+
+### 5.2 Specialized Subagent Archetypes (The Architectural Guild)
+
+Phase 5 defines 5 strictly typed, purpose-built subagent roles:
+
+#### 1. Lead Architect / General Contractor (`architect_lead`)
+- **System Role**: Mission planner, resource coordinator, and master orchestrator.
+- **Capabilities**: Full workspace tools, MCP read/write tools, and subagent invocation tools (`invoke_subagent`, `define_subagent`, `send_message`, `manage_subagents`).
+- **Workflow**:
+  1. Inspects user intent and queries `minecraft://knowledge/architecture` and `minecraft://geometry/templates`.
+  2. Initializes the project on the shared blackboard (`minecraft://orchestration/blackboard`).
+  3. Launches subagents sequentially or concurrently across isolated spatial bounding boxes.
+  4. Monitors progress via `minecraft://construction/progress` and performs transactional commits.
+
+#### 2. Site Surveyor & Ground Anchoring Engineer (`site_surveyor`)
+- **System Role**: Geotechnical surveyor, terrain leveler, and ground-anchoring specialist.
+- **Target Tools**: `find_build_location`, `scan_region`, `get_blocks`, `mark_location`, `prepare_foundation`.
+- **Workflow**:
+  1. Probes terrain topography around anchor $(X, Y, Z)$ using `find_build_location`.
+  2. Determines base datum $Y_{base}$, footprint bounding box $[X_{min}, Z_{min}] \times [X_{max}, Z_{max}]$, and clearance volume.
+  3. Executes `TerrainAdaptiveFoundationEngine` to level vegetation and generate solid sub-foundation fill columns downward to solid bedrock/dirt.
+  4. Writes surveyed site parameters to `minecraft://orchestration/blackboard` and creates landmark in `minecraft://world/map`.
+
+#### 3. Structural Mason & Geometry Builder (`structural_mason`)
+- **System Role**: Heavy structural framing, Geometry IR compiler, and procedural construction engine.
+- **Target Tools**: `build_procedural`, `create_geometry_session`, `add_primitive`, `compose_geometry`, `instantiate_template`, `compile_and_build`.
+- **Workflow**:
+  1. Reads site datum $Y_{base}$ and surveyed footprint from `minecraft://orchestration/blackboard`.
+  2. Pulls architectural template or composes Geometry AST (colonnades, radial bays, barrel/groin vaults, domes, load-bearing walls).
+  3. Executes 3D greedy cuboid meshing and dispatches `fill_region` operations to the Minecraft bridge.
+  4. Records structural shell bounds and posts completion event to `minecraft://construction/progress`.
+
+#### 4. Artisan Carver & Interior Specialist (`artisan_carver`)
+- **System Role**: Fine ornamentation, architectural millwork, fenestration, and interior furnishings.
+- **Target Tools**: `build_wall`, `build_roof`, `build_pillar`, `place_blocks`, `place_block`, `interact_with_block`.
+- **Workflow**:
+  1. Reads structural shell bounds and opening coordinates from `minecraft://orchestration/blackboard`.
+  2. Carves window traceries, stained glass lancets, and decorative rose windows.
+  3. Places balustrades, battlements, crenellations, keystones, and cornices.
+  4. Outfits interior: floor mosaics, chandeliers/lanterns, seating rows, stairwells, and portals.
+
+#### 5. Quality Assurance & Verification Inspector (`qa_inspector`)
+- **System Role**: Structural auditor, tolerance verification, and automated defect remediation.
+- **Target Tools**: `verify_structure_compact`, `get_block`, `inspect_area`, `repair_structure`, `rollback_build`.
+- **Workflow**:
+  1. Reads expected geometry bounds, volume, and checksum from `minecraft://orchestration/blackboard`.
+  2. Executes multi-point physical sampling and compact verification (`verify_structure_compact`).
+  3. Detects any misplaced, floating, or missing blocks; triggers `repair_structure` if discrepancies $> 0$.
+  4. Publishes final certification report to `minecraft://inspection/scorecard`.
+
+---
+
+### 5.3 Procedural Architectural Template Library (Prefabs)
+
+Phase 5 equips `ProceduralSessionManager` with a rich built-in catalog of parameterized architectural templates:
+
+| Template Identifier | Architectural Style | Structural Components Included | Key Parameters |
+| :--- | :--- | :--- | :--- |
+| `gothic_cathedral_complex` | High Gothic | Twin bell towers, spires, rose window facade, nave colonnade, ribbed groin vaults, flying buttresses, clerestory lancets, choir apse | `length`, `width`, `vault_height`, `tower_height`, `stone_material`, `accent_material` |
+| `roman_colosseum_complex` | Classical Roman | Multi-tier radial arcades (Doric/Ionic), cavea tiered seating, hypogeum arena floor with iron grate, attic wall cornice | `outer_radius`, `inner_radius`, `arcade_levels`, `bays_count`, `sandstone_type` |
+| `mughal_monument_complex` | Indo-Islamic / Mughal | Raised terrace plinth, central octagonal mausoleum, 4 pishtaq iwans, double onion dome with finial, 4 corner minarets, Charbagh pool | `plinth_size`, `dome_radius`, `minaret_height`, `marble_material`, `inlay_material` |
+| `medieval_castle_fortress` | European Feudal | Concentric curtain walls, crenellated parapets, 4 round corner bastions, fortified gatehouse with barbican & portcullis, central keep/donjon | `outer_span`, `wall_height`, `keep_floors`, `bastion_radius`, `stone_material` |
+| `greek_peripteral_temple` | Classical Hellenic | 3-stepped stereobate/stylobate, peripteral Doric colonnade with capitals, pediment gables with frieze/triglyphs, cella sanctuary | `colonnade_length`, `colonnade_width`, `column_height`, `roof_pitch`, `marble_type` |
+| `islamic_fluted_minaret` | Sultanate / Indo-Islamic | Multi-storey tapering tower, alternating circular & angular flutings, muqarnas corbel balconies with iron railings, observation cupola | `base_radius`, `top_radius`, `total_height`, `storeys`, `balconies_count` |
+
+---
+
+### 5.4 MCP 2.0 Shared Blackboard Resources
+
+Phase 5 registers 5 new real-time resources acting as shared inter-agent memory:
+
+1. **`minecraft://orchestration/roster`**:
+   - Active subagents registry: conversation IDs, assigned roles, current lifecycle state (`IDLE`, `ASSIGNED`, `EXECUTING`, `VERIFYING`, `COMPLETED`, `FAILED`), and allocated workspace zones.
+2. **`minecraft://orchestration/blackboard`**:
+   - Inter-agent communication board: site datum $Y_{base}$, surveyed footprint boundaries ($[X_{min}, Z_{min}] \times [X_{max}, Z_{max}]$), structural shell anchors, layer heights, and material palette tokens.
+3. **`minecraft://geometry/templates/{template_id}`**:
+   - Dynamic resource querying detailed JSON schemas, default dimensions, component hierarchies, and material slots for any registered template.
+4. **`minecraft://construction/progress`**:
+   - Granular hierarchical progress tracker broken down by construction phase (e.g. `Foundation: 100%`, `Shell: 85%`, `Roof: 0%`, `Detailing: 0%`), block counts placed, and bridge call statistics.
+5. **`minecraft://inspection/scorecard`**:
+   - Live QA verification metrics: boundary compliance, physical sample hit rate, material breakdown histograms, SHA-256 integrity checksum matches, and automated repair remediation logs.
+
+---
+
+### 5.5 MCP 2.0 Multi-Agent Workflow Prompts
+
+Phase 5 introduces 6 high-level prompt templates guiding conversational multi-agent orchestration:
+
+1. **`orchestrate_architectural_team(monument_type, anchor_x, anchor_y, anchor_z, style, scale)`**:
+   - Master prompt instructing the Lead Architect to formulate an orchestration plan, initialize the blackboard, and dispatch the subagents in proper sequence.
+2. **`survey_and_prep_site(anchor_x, anchor_y, anchor_z, width, depth, foundation_material)`**:
+   - Specialized prompt for the `site_surveyor` subagent to profile terrain, calculate datum $Y_{base}$, clear obstacles, anchor ground columns, and publish surveyed bounds.
+3. **`construct_procedural_shell(session_id, template_name, anchor_x, anchor_y, anchor_z, parameters)`**:
+   - Specialized prompt for the `structural_mason` subagent to compile the primary load-bearing geometry and execute greedy cuboid placement.
+4. **`detail_and_furnish(structure_name, bounds, theme, features)`**:
+   - Specialized prompt for the `artisan_carver` subagent to add architectural millwork, tracery, lanterns, balustrades, and interior appointments.
+5. **`inspect_and_certify(project_id, tolerance, auto_repair)`**:
+   - Specialized prompt for the `qa_inspector` subagent to run multi-point checks, verify volume/checksum, repair discrepancies, and issue certification.
+6. **`build_monument_from_template(template_name, anchor_x, anchor_y, anchor_z, custom_parameters)`**:
+   - One-shot end-to-end prompt allowing users to instantiate complete monumental complexes via the multi-agent pipeline.
+
+---
+
+### 5.6 Coordination Protocol, Spatial Zoning & Transaction Gates
+
+To guarantee that multiple subagents do not collide or corrupt world state:
+1. **Spatial Coordinate Zoning**:
+   - Each subagent is assigned a non-overlapping coordinate bounding box or a strictly segregated vertical layer range:
+     - Foundation: $[Y_{bedrock} \rightarrow Y_{base}]$
+     - Primary Shell: $[Y_{base} \rightarrow Y_{roof\_base}]$
+     - Roof / Spire / Domes: $[Y_{roof\_base} \rightarrow Y_{peak}]$
+     - Detailing / Fenestration: Specific perimeter wall surface slices.
+2. **Milestone Phase Gates**:
+   - Strict transactional sequence:
+     $$\text{Survey \& Foundation} \xrightarrow{\text{Gate 1 PASS}} \text{Structural Shell} \xrightarrow{\text{Gate 2 PASS}} \text{Detailing \& Interiors} \xrightarrow{\text{Gate 3 PASS}} \text{Final QA Certification}$$
+   - No subagent proceeds to an upper tier until the underlying milestone has been verified and recorded on the blackboard.
+3. **Reactive Inter-Agent Messaging**:
+   - Subagents communicate completion and handoffs using `send_message`.
+   - The Lead Architect receives reactive wakeups without polling loops.
+
+---
+
+### 5.7 Real-Time Testing & Verification Suite
+
+#### Test Set A: Automated Python MCP 2.0 Client Script (`scripts/test_phase5_client.py`)
+Run the automated test suite connecting to the live server via MCP stdio:
+```bash
+source .venv/bin/activate
+python scripts/test_phase5_client.py
+```
+**Verification Checks (12 Core Tests)**:
+- [x] **1. Template Registry Inspection**: Verifies all 6 built-in architectural templates are registered and expose valid parameter schemas via `minecraft://geometry/templates/{id}`.
+- [x] **2. Blackboard Resource Synchronization**: Tests reading, writing, and atomic updating of shared multi-agent blackboard state (`minecraft://orchestration/blackboard`).
+- [x] **3. Agent Roster Lifecycle Tracking**: Exercises subagent state transitions (`ASSIGNED` $\rightarrow$ `WORKING` $\rightarrow$ `COMPLETED`) via `minecraft://orchestration/roster`.
+- [x] **4. Multi-Agent Prompt Compilation**: Tests all 6 Phase 5 prompt templates with parameterized arguments; verifies generated system instructions match subagent role specifications.
+- [x] **5. Spatial Zoning & Collision Guard**: Verifies that overlapping spatial assignments trigger conflict warnings before execution.
+- [x] **6. Mock Surveyor Execution**: Runs `survey_and_prep_site` workflow; confirms ground height probing and datum publication to blackboard.
+- [x] **7. Mock Mason Procedural Instantiation**: Runs `construct_procedural_shell` using `greek_peripteral_temple` template; confirms greedy cuboid meshing and progress updates.
+- [x] **8. Mock Artisan Detailing Pass**: Runs `detail_and_furnish` workflow; confirms placement of perimeter columns, cornices, and lanterns.
+- [x] **9. Closed-Loop QA Inspector Certification**: Runs `inspect_and_certify`; asserts compact verification report and certification scorecard generation.
+- [x] **10. End-to-End Multi-Agent Coordination Pipeline**: Simulates full Lead Architect pipeline coordinating 4 subagent roles in sequence.
+- [x] **11. Transaction Rollback on Subagent Failure**: Injects simulated fault during interior detailing; verifies rollback restores pre-detail state while preserving structural shell.
+- [x] **12. Multi-Agent Token Efficiency Benchmark**: Measures prompt argument tokens across all subagent handoffs; asserts total orchestration overhead is $< 500$ tokens for a complete monumental complex.
+
+#### Test Set B: Antigravity Multi-Agent Live Monument Construction
+1. Prompt Antigravity in chat:
+   > *"Using the Phase 5 Multi-Agent Architectural Guild, orchestrate your specialized subagents to construct a Greek Peripteral Temple at (-100, 70, 0) with a 3-stepped stylobate, 16 fluted columns, pediment gables, and bronze lanterns. Follow the full Surveyor -> Mason -> Artisan -> QA workflow."*
+2. **Verification Checks**:
+   - [ ] Primary agent assumes `architect_lead` role and initializes the project blackboard.
+   - [ ] Primary agent defines and invokes `site_surveyor`, `structural_mason`, `artisan_carver`, and `qa_inspector` via Antigravity subagent tools.
+   - [ ] Subagents execute their respective tasks without token blowouts or coordinate enumeration.
+   - [ ] Temple stands completed in the Minecraft world, perfectly anchored with no floating voids.
+   - [ ] QA Inspector publishes final 100% verification scorecard to `minecraft://inspection/scorecard`.
+
+---
+
+## 6. Summary of Phase Gates
 
 | Phase | Core Deliverables (MCP 2.0) | Test Set A (Python Client) | Test Set B (Antigravity Integration) | Status |
 | :--- | :--- | :--- | :--- | :--- |
@@ -691,4 +919,6 @@ python scripts/test_phase4_client.py
 | **Phase 2** | World Mutation, Player Actions, Generic Block Interaction, Basic Movement & Action Verification | `scripts/test_phase2_client.py` (12/12 Passing) | Prompt: Observe → Act → Verify (place 3x3 platform, verify, break center, verify opening) | **VERIFIED LIVE** |
 | **Phase 3** | Blueprints, Construction Engine, Resource Manager, 3D Navigation, Verification & Repair | `scripts/test_phase3_client.py` (12/12 Passing) | Prompt: Autonomous site finding, generic structure build, verification & progress report | **VERIFIED LIVE** |
 | **Phase 4** | Procedural Geometry IR, Adaptive Base Foundation, Greedy Cuboid Mesher, Stateful Handles, Compact Verification | `scripts/test_phase4_client.py` (12/12 Passing) | Prompt: Token-efficient procedural Colosseum arcade & dome with compact verification | **VERIFIED LIVE** |
+| **Phase 5** | Multi-Agent Guild, Architectural Templates (Prefabs), Shared Blackboard Resources, Subagent Prompts | `scripts/test_phase5_client.py` (12/12 Passing) | Prompt: Multi-agent orchestrated monument construction (Greek Temple / Gothic Cathedral) | **TEST SET A VERIFIED (READY FOR LIVE TEST SET B)** |
+
 

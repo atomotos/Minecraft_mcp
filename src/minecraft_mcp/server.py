@@ -11,7 +11,11 @@ from minecraft_mcp.procedural import (
     ProceduralSessionManager,
     BuildTransactionManager,
     parse_geometry_spec,
+    TEMPLATES_METADATA,
+    get_template_catalog,
+    build_template_spec,
 )
+from minecraft_mcp.orchestration import OrchestrationBlackboard
 from minecraft_mcp.safety import (
     validate_coordinates,
     validate_block_id,
@@ -770,9 +774,22 @@ async def build_procedural(
     compiler = VoxelCompiler()
     compiled_plan = compiler.compile(final_space, anchor=(ax, ay, az))
 
+    world_bounds = {
+        "min": {
+            "x": compiled_plan.bounds["min"]["x"] + ax,
+            "y": compiled_plan.bounds["min"]["y"] + ay,
+            "z": compiled_plan.bounds["min"]["z"] + az,
+        },
+        "max": {
+            "x": compiled_plan.bounds["max"]["x"] + ax,
+            "y": compiled_plan.bounds["max"]["y"] + ay,
+            "z": compiled_plan.bounds["max"]["z"] + az,
+        }
+    }
+
     project_id = f"proc_{uuid.uuid4().hex[:8]}"
     tx_mgr = BuildTransactionManager.get_instance()
-    await tx_mgr.begin_transaction(project_id, compiled_plan.bounds, client)
+    await tx_mgr.begin_transaction(project_id, world_bounds, client)
     exec_res = await tx_mgr.execute_plan_transactionally(project_id, compiled_plan, client, action_tracker)
 
     if not exec_res.get("success", False):
@@ -895,7 +912,7 @@ async def compile_and_build(
 
     final_space = structure_space.clone()
 
-    if adaptive_foundation:
+    if adaptive_foundation and not dry_run:
         foundation_engine = TerrainAdaptiveFoundationEngine(client=client)
         try:
             f_space = await foundation_engine.prepare_base_foundation(
@@ -925,9 +942,22 @@ async def compile_and_build(
             "bounds": compiled_plan.bounds,
         }
 
+    world_bounds = {
+        "min": {
+            "x": compiled_plan.bounds["min"]["x"] + ax,
+            "y": compiled_plan.bounds["min"]["y"] + ay,
+            "z": compiled_plan.bounds["min"]["z"] + az,
+        },
+        "max": {
+            "x": compiled_plan.bounds["max"]["x"] + ax,
+            "y": compiled_plan.bounds["max"]["y"] + ay,
+            "z": compiled_plan.bounds["max"]["z"] + az,
+        }
+    }
+
     project_id = f"proc_{uuid.uuid4().hex[:8]}"
     tx_mgr = BuildTransactionManager.get_instance()
-    await tx_mgr.begin_transaction(project_id, compiled_plan.bounds, client)
+    await tx_mgr.begin_transaction(project_id, world_bounds, client)
     exec_res = await tx_mgr.execute_plan_transactionally(project_id, compiled_plan, client, action_tracker)
 
     if not exec_res.get("success", False):
@@ -967,7 +997,7 @@ async def verify_structure_compact(project_id: str) -> Dict[str, Any]:
     snapshot = tx_mgr.active_snapshots.get(project_id)
     if not snapshot:
         wm = SpatialWorldModelManager.get_instance()
-        for s in wm.structures:
+        for s in wm.get_structures():
             if s.project_id == project_id:
                 return {
                     "success": True,
@@ -1013,6 +1043,98 @@ async def rollback_build(project_id: str) -> Dict[str, Any]:
     """Rolls back placed blocks to pre-build snapshot state if an error or user cancellation occurred."""
     tx_mgr = BuildTransactionManager.get_instance()
     return await tx_mgr.rollback_transaction(project_id, client)
+
+# ---------------------------------------------------------------------------
+# Phase 5: Multi-Agent Architectural Guild Orchestration Tools
+# ---------------------------------------------------------------------------
+
+@server.tool()
+async def update_blackboard(key: str, value: Any) -> Dict[str, Any]:
+    """Updates a shared parameter on the multi-agent orchestration blackboard."""
+    bb = OrchestrationBlackboard.get_instance()
+    bb.set_blackboard_value(key, value)
+    return {"success": True, "key": key, "value": value}
+
+@server.tool()
+async def update_subagent_status(
+    agent_id: str,
+    state: str,
+    current_task: Optional[str] = None
+) -> Dict[str, Any]:
+    """Updates the lifecycle state and active task of a subagent on the guild roster."""
+    bb = OrchestrationBlackboard.get_instance()
+    if agent_id not in bb.roster:
+        bb.register_subagent(agent_id=agent_id, role="guild_agent", current_task=current_task or "")
+    success = bb.update_subagent_state(agent_id, state, current_task)
+    return {"success": success, "agent_id": agent_id, "state": state.upper(), "current_task": current_task}
+
+@server.tool()
+async def assign_spatial_zone(
+    agent_id: str,
+    min_coord: List[int],
+    max_coord: List[int],
+    zone_name: Optional[str] = None
+) -> Dict[str, Any]:
+    """Assigns a 3D spatial boundary to an agent, performing collision checks against all active zones."""
+    if len(min_coord) != 3 or len(max_coord) != 3:
+        return {"success": False, "error": "Coordinates must have exactly 3 integers: [x, y, z]"}
+    bb = OrchestrationBlackboard.get_instance()
+    bounds = {"min": min_coord, "max": max_coord}
+    return bb.assign_zone(agent_id, bounds, zone_name)
+
+@server.tool()
+async def release_spatial_zone(agent_id: str) -> Dict[str, Any]:
+    """Releases the spatial zone claimed by a subagent upon phase or task completion."""
+    bb = OrchestrationBlackboard.get_instance()
+    bb.release_zone(agent_id)
+    return {"success": True, "agent_id": agent_id, "released": True}
+
+@server.tool()
+async def record_progress_milestone(
+    phase: str,
+    progress_pct: float,
+    blocks_placed: int = 0,
+    bridge_calls: int = 0,
+    status: str = "IN_PROGRESS"
+) -> Dict[str, Any]:
+    """Updates milestone progress for an architectural construction phase (Foundation, Shell, Detailing, QA)."""
+    bb = OrchestrationBlackboard.get_instance()
+    updated = bb.update_progress(
+        phase_name=phase,
+        progress_pct=progress_pct,
+        blocks_placed=blocks_placed,
+        bridge_calls=bridge_calls,
+        status=status,
+    )
+    return {"success": True, "progress": updated}
+
+@server.tool()
+async def update_inspection_scorecard(
+    status: str,
+    certified: bool = False,
+    bounds_match: bool = True,
+    expected_volume: int = 0,
+    verified_blocks: int = 0,
+    integrity_checksum: Optional[str] = None,
+    samples_checked: int = 0,
+    discrepancies: int = 0,
+    repaired_blocks: int = 0
+) -> Dict[str, Any]:
+    """Records QA verification audit scorecard and certification status."""
+    bb = OrchestrationBlackboard.get_instance()
+    scorecard_data = {
+        "status": status,
+        "certified": certified,
+        "bounds_match": bounds_match,
+        "expected_volume": expected_volume,
+        "verified_blocks": verified_blocks,
+        "integrity_checksum": integrity_checksum,
+        "samples_checked": samples_checked,
+        "discrepancies": discrepancies,
+        "repaired_blocks": repaired_blocks,
+    }
+    bb.record_scorecard(scorecard_data)
+    return {"success": True, "scorecard": scorecard_data}
 
 # ---------------------------------------------------------------------------
 # MCP 2.0 Resources (Dynamic Context URIs)
@@ -1115,9 +1237,32 @@ async def resource_geometry_sessions() -> str:
 
 @server.resource("minecraft://geometry/templates")
 async def resource_geometry_templates() -> str:
-    """Registered procedural architectural templates (prefabs) available for instancing."""
-    session_mgr = ProceduralSessionManager.get_instance()
-    return json.dumps(list(session_mgr.templates.keys()), indent=2)
+    """Registered procedural architectural templates (prefabs) catalog with descriptions and default parameters."""
+    return json.dumps(get_template_catalog(), indent=2)
+
+@server.resource("minecraft://orchestration/roster")
+async def resource_orchestration_roster() -> str:
+    """Active multi-agent architectural guild roster, roles, states, and assigned spatial zones."""
+    bb = OrchestrationBlackboard.get_instance()
+    return json.dumps(bb.get_roster(), indent=2)
+
+@server.resource("minecraft://orchestration/blackboard")
+async def resource_orchestration_blackboard() -> str:
+    """Shared inter-agent blackboard state: site datum, surveyed footprint, anchors, and material tokens."""
+    bb = OrchestrationBlackboard.get_instance()
+    return json.dumps(bb.get_blackboard_state(), indent=2)
+
+@server.resource("minecraft://construction/progress")
+async def resource_construction_progress() -> str:
+    """Hierarchical construction milestone progress breakdown across active project phases."""
+    bb = OrchestrationBlackboard.get_instance()
+    return json.dumps(bb.get_progress(), indent=2)
+
+@server.resource("minecraft://inspection/scorecard")
+async def resource_inspection_scorecard() -> str:
+    """Live QA verification metrics, structural tolerance compliance, checksums, and repair logs."""
+    bb = OrchestrationBlackboard.get_instance()
+    return json.dumps(bb.get_scorecard(), indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -1212,6 +1357,145 @@ Procedural Protocol:
    {{"type": "ring", "center": [0, 0, 0], "outer_radius": {radius}, "inner_radius": {inner_radius}, "height": {height}, "material": "minecraft:smooth_sandstone"}}
 3. Keep `adaptive_foundation=true` to ensure proper ground leveling and underpinning.
 4. Verify the structure compactly using `verify_structure_compact()`.
+"""
+
+@server.prompt()
+def orchestrate_architectural_team(
+    monument_type: str = "greek_peripteral_temple",
+    anchor_x: int = 0,
+    anchor_y: int = 64,
+    anchor_z: int = 0,
+    scale: float = 1.0
+) -> str:
+    """Master workflow prompt instructing the Lead Architect to formulate an orchestration plan and dispatch specialized subagents."""
+    return f"""You are the Master Lead Architect orchestrating the construction of a monumental {monument_type} at ({anchor_x}, {anchor_y}, {anchor_z}) (scale: {scale}).
+
+Operational Multi-Agent Protocol:
+1. Initialize Project & Blackboard:
+   - Reset the project on the blackboard via `update_blackboard(key='monument_name', value='{monument_type}')`.
+   - Set anchor coordinates: `update_blackboard(key='anchor', value=[{anchor_x}, {anchor_y}, {anchor_z}])`.
+   - Inspect available architectural templates at `minecraft://geometry/templates`.
+
+2. Phase 1 — Dispatch Site Surveyor (`site_surveyor`):
+   - Invoke `site_surveyor` to probe terrain elevation, establish base datum Y_base, clear obstruction envelope, and anchor sub-foundation columns.
+   - Await surveyor's report and confirm surveyed footprint bounds on `minecraft://orchestration/blackboard`.
+   - Update milestone via `record_progress_milestone(phase='SURVEY_FOUNDATION', progress_pct=100.0, status='COMPLETED')`.
+
+3. Phase 2 — Dispatch Structural Mason (`structural_mason`):
+   - Claim spatial zone for the superstructure.
+   - Instruct mason to compile the primary load-bearing geometry (colonnades, radial bays, vaults, domes) using template '{monument_type}' or Geometry IR with greedy cuboid meshing.
+   - Verify shell placement and update `record_progress_milestone(phase='STRUCTURAL_SHELL', progress_pct=100.0, status='COMPLETED')`.
+
+4. Phase 3 — Dispatch Artisan Carver (`artisan_carver`):
+   - Assign surface and interior detailing zones.
+   - Instruct artisan to carve window traceries, cornices, balustrades, lanterns, portals, and interior furnishings.
+   - Update `record_progress_milestone(phase='ARCHITECTURAL_DETAILING', progress_pct=100.0, status='COMPLETED')`.
+
+5. Phase 4 — Dispatch QA Inspector (`qa_inspector`):
+   - Instruct QA inspector to run `verify_structure_compact()`, check physical block samples, and trigger `repair_structure()` if discrepancies exist.
+   - Review the final certification scorecard at `minecraft://inspection/scorecard`.
+   - Update `record_progress_milestone(phase='QA_CERTIFICATION', progress_pct=100.0, status='COMPLETED')`.
+
+6. Completion:
+   - Register the completed monument landmark via `mark_location(name='{monument_type}', position=[{anchor_x}, {anchor_y}, {anchor_z}], category='monument')`.
+   - Present final certified scorecard to the user.
+"""
+
+@server.prompt()
+def survey_and_prep_site(
+    anchor_x: int = 0,
+    anchor_y: int = 64,
+    anchor_z: int = 0,
+    width: int = 24,
+    depth: int = 24,
+    foundation_material: str = "minecraft:stone_bricks"
+) -> str:
+    """Specialized prompt for the site_surveyor subagent to survey topography, level datum, and anchor ground columns."""
+    return f"""You are the Site Surveyor & Ground Anchoring Engineer for an architectural build at ({anchor_x}, {anchor_y}, {anchor_z}).
+
+Surveyor Mission:
+1. Run `find_build_location(radius=20, width={width}, depth={depth}, center=[{anchor_x}, {anchor_y}, {anchor_z}])` to evaluate topography.
+2. Determine site datum Y_base (default {anchor_y}).
+3. Use `TerrainAdaptiveFoundationEngine` or place ground-anchoring columns down to bedrock/solid ground so no building plinth hovers in air.
+4. Record surveyed parameters:
+   - `update_blackboard(key='site_datum_y', value={anchor_y})`
+   - `update_blackboard(key='surveyed_footprint', value={{'min': [{anchor_x} - {width//2}, {anchor_y}, {anchor_z} - {depth//2}], 'max': [{anchor_x} + {width//2}, {anchor_y}, {anchor_z} + {depth//2}]}})`
+5. Report completion to Lead Architect.
+"""
+
+@server.prompt()
+def construct_procedural_shell(
+    session_id: str = "",
+    template_name: str = "greek_peripteral_temple",
+    anchor_x: int = 0,
+    anchor_y: int = 64,
+    anchor_z: int = 0
+) -> str:
+    """Specialized prompt for the structural_mason subagent to compile primary load-bearing geometry via greedy cuboid meshing."""
+    return f"""You are the Structural Mason & Geometry Builder constructing the heavy shell for '{template_name}' at ({anchor_x}, {anchor_y}, {anchor_z}).
+
+Mason Mission:
+1. Check `minecraft://orchestration/blackboard` for site datum Y_base.
+2. Instantiate template '{template_name}' via `create_geometry_session` and `instantiate_template` (or compose Geometry IR).
+3. Compile and build the structure using `compile_and_build(session_id='{session_id}', anchor=[{anchor_x}, {anchor_y}, {anchor_z}], adaptive_foundation=True)`.
+4. Ensure all solid cores are placed via greedy `fill_region` cuboids.
+5. Record structural shell bounds on the blackboard and report completion.
+"""
+
+@server.prompt()
+def detail_and_furnish(
+    structure_name: str = "greek_temple",
+    theme: str = "classical",
+    features: str = "cornices, lanterns, stairwells"
+) -> str:
+    """Specialized prompt for the artisan_carver subagent to apply architectural ornamentation and interior appointments."""
+    return f"""You are the Artisan Carver & Interior Specialist decorating '{structure_name}' (theme: {theme}, features: {features}).
+
+Artisan Mission:
+1. Read structural bounds and opening positions from `minecraft://orchestration/blackboard`.
+2. Claim spatial detailing zones via `assign_spatial_zone()`.
+3. Add architectural millwork:
+   - Entablature cornices, keystones, and balustrades.
+   - Sconces, lanterns, or chandeliers for illumination.
+   - Staircases, doors/gates, floor tiling, and sanctuary furnishings.
+4. Release spatial zone via `release_spatial_zone()` and report completion.
+"""
+
+@server.prompt()
+def inspect_and_certify(
+    project_id: str = "",
+    tolerance: float = 0.0,
+    auto_repair: bool = True
+) -> str:
+    """Specialized prompt for the qa_inspector subagent to audit bounds, verify samples, and issue certification."""
+    return f"""You are the Quality Assurance & Verification Inspector certifying project '{project_id or "latest"}'.
+
+Inspector Mission:
+1. Run `verify_structure_compact(project_id='{project_id}', tolerance={tolerance})` to verify boundary compliance and sample solidity.
+2. If discrepancies exist and auto_repair is True, trigger `repair_structure(project_id='{project_id}')`.
+3. Confirm checksum, volume, and material breakdowns match expected specifications.
+4. Update `minecraft://inspection/scorecard` with certified=True and final integrity score.
+5. Notify Lead Architect that construction is officially certified.
+"""
+
+@server.prompt()
+def build_monument_from_template(
+    template_name: str = "greek_peripteral_temple",
+    anchor_x: int = 0,
+    anchor_y: int = 64,
+    anchor_z: int = 0
+) -> str:
+    """One-shot template construction prompt orchestrating the entire multi-agent guild to construct a monumental complex."""
+    return f"""You are the Master Lead Architect tasked with constructing a monumental {template_name} at ({anchor_x}, {anchor_y}, {anchor_z}).
+
+Guild Mission:
+1. Review template parameters at `minecraft://geometry/templates`.
+2. Execute the multi-agent workflow:
+   - Survey site & level ground at ({anchor_x}, {anchor_y}, {anchor_z}).
+   - Compile and execute procedural shell with greedy cuboid meshing.
+   - Apply ornamental detailing and lanterns.
+   - Audit and certify 100% structural integrity.
+3. Verify the final build compactly and present scorecard to user.
 """
 
 def main():

@@ -44,11 +44,13 @@ class ProceduralSessionManager:
     """Global manager for stateful procedural geometry sessions and shared templates."""
 
     _instance: Optional["ProceduralSessionManager"] = None
-    _lock = threading.Lock()
+    _lock = threading.RLock()
 
     def __init__(self):
         self.sessions: Dict[str, ProceduralSession] = {}
         self.templates: Dict[str, Dict[str, Any]] = {}
+        from minecraft_mcp.procedural.templates_library import register_builtin_templates
+        register_builtin_templates(self)
 
     @classmethod
     def get_instance(cls) -> "ProceduralSessionManager":

@@ -197,14 +197,28 @@ class BuildTransactionManager:
         """Rolls back placed blocks to snapshot state."""
         with self._lock:
             snapshot = self.active_snapshots.get(project_id)
-        if not snapshot or not snapshot.original_blocks:
+        if not snapshot:
             return {"success": False, "error": f"No active snapshot found for project '{project_id}'"}
 
         restored_count = 0
-        for (x, y, z), orig_block in snapshot.original_blocks.items():
+        if snapshot.original_blocks:
+            for (x, y, z), orig_block in snapshot.original_blocks.items():
+                try:
+                    await client.set_block(x, y, z, orig_block)
+                    restored_count += 1
+                except Exception:
+                    pass
+        else:
             try:
-                await client.set_block(x, y, z, orig_block)
-                restored_count += 1
+                b_min = snapshot.bounds.get("min", {})
+                b_max = snapshot.bounds.get("max", {})
+                if b_min and b_max:
+                    await client.fill_region(
+                        from_x=b_min["x"], from_y=b_min["y"], from_z=b_min["z"],
+                        to_x=b_max["x"], to_y=b_max["y"], to_z=b_max["z"],
+                        block_state="minecraft:air"
+                    )
+                    restored_count = (b_max["x"] - b_min["x"] + 1) * (b_max["y"] - b_min["y"] + 1) * (b_max["z"] - b_min["z"] + 1)
             except Exception:
                 pass
 

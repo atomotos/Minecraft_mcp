@@ -81,4 +81,15 @@ __all__ = [
     "BuildTransactionManager",
     "CompactVerificationReport",
     "parse_geometry_spec",
+    "TEMPLATES_METADATA",
+    "register_builtin_templates",
+    "get_template_catalog",
+    "build_template_spec",
 ]
+
+from minecraft_mcp.procedural.templates_library import (
+    TEMPLATES_METADATA,
+    register_builtin_templates,
+    get_template_catalog,
+    build_template_spec,
+)

@@ -21,6 +21,22 @@ class BridgeError(Exception):
         self.code = code
         self.message = message
 
+BLOCK_ALIASES: Dict[str, str] = {
+    "minecraft:chain": "minecraft:iron_chain",
+    "chain": "minecraft:iron_chain",
+}
+
+def normalize_block_state(block_state: str) -> str:
+    """Normalizes legacy block IDs to 26.2 registry names."""
+    if not block_state:
+        return block_state
+    for old_id, new_id in BLOCK_ALIASES.items():
+        if block_state == old_id:
+            return new_id
+        if block_state.startswith(f"{old_id}["):
+            return block_state.replace(old_id, new_id, 1)
+    return block_state
+
 class BridgeClient:
     def __init__(
         self,
@@ -85,13 +101,35 @@ class BridgeClient:
         max_x: int, max_y: int, max_z: int,
         include_air: bool = False
     ) -> AreaBlocksResponse:
-        body = {
-            "min": {"x": min_x, "y": min_y, "z": min_z},
-            "max": {"x": max_x, "y": max_y, "z": max_z},
-            "includeAir": include_air,
-        }
-        data = await self._request("POST", "/api/v1/world/blocks", json_data=body)
-        return AreaBlocksResponse.model_validate(data)
+        dx = max_x - min_x + 1
+        dy = max_y - min_y + 1
+        dz = max_z - min_z + 1
+        vol = dx * dy * dz
+
+        if vol <= 30000:
+            body = {
+                "min": {"x": min_x, "y": min_y, "z": min_z},
+                "max": {"x": max_x, "y": max_y, "z": max_z},
+                "includeAir": include_air,
+            }
+            data = await self._request("POST", "/api/v1/world/blocks", json_data=body)
+            return AreaBlocksResponse.model_validate(data)
+
+        # Recursively subdivide along longest axis to prevent exceeding Fabric 32,768 volume limit
+        if dx >= dy and dx >= dz:
+            mid_x = min_x + dx // 2 - 1
+            r1 = await self.get_blocks(min_x, min_y, min_z, mid_x, max_y, max_z, include_air)
+            r2 = await self.get_blocks(mid_x + 1, min_y, min_z, max_x, max_y, max_z, include_air)
+        elif dz >= dy:
+            mid_z = min_z + dz // 2 - 1
+            r1 = await self.get_blocks(min_x, min_y, min_z, max_x, max_y, mid_z, include_air)
+            r2 = await self.get_blocks(min_x, min_y, mid_z + 1, max_x, max_y, max_z, include_air)
+        else:
+            mid_y = min_y + dy // 2 - 1
+            r1 = await self.get_blocks(min_x, min_y, min_z, max_x, mid_y, max_z, include_air)
+            r2 = await self.get_blocks(min_x, mid_y + 1, min_z, max_x, max_y, max_z, include_air)
+
+        return AreaBlocksResponse(count=len(r1.blocks) + len(r2.blocks), blocks=r1.blocks + r2.blocks)
 
     async def get_entities(
         self,
@@ -120,7 +158,7 @@ class BridgeClient:
             "x": x,
             "y": y,
             "z": z,
-            "blockState": block_state,
+            "blockState": normalize_block_state(block_state),
             "flags": flags,
         }
         return await self._request("POST", "/api/v1/world/set_block", json_data=body)
@@ -146,10 +184,10 @@ class BridgeClient:
         body: Dict[str, Any] = {
             "from": {"x": from_x, "y": from_y, "z": from_z},
             "to": {"x": to_x, "y": to_y, "z": to_z},
-            "blockState": block_state,
+            "blockState": normalize_block_state(block_state),
         }
         if replace_filter:
-            body["replaceFilter"] = replace_filter
+            body["replaceFilter"] = normalize_block_state(replace_filter)
         return await self._request("POST", "/api/v1/world/fill", json_data=body)
 
     async def interact_with_block(self, x: int, y: int, z: int, hand: str = "main_hand", player: Optional[str] = None) -> Dict[str, Any]:

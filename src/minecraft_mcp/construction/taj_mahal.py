@@ -39,7 +39,7 @@ DEFAULT_TAJ_PALETTE = {
     "garden_leaves": "minecraft:flowering_azalea_leaves[persistent=true]",
     "spire": "minecraft:lightning_rod",
     "lantern": "minecraft:lantern",
-    "chain": "minecraft:chain",
+    "chain": "minecraft:iron_chain",
 }
 
 def create_taj_mahal_blueprint() -> ArchitecturalBlueprint:

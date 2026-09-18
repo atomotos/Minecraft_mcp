@@ -17,6 +17,11 @@ class VoxelSpace:
         pos = (int(round(x)), int(round(y)), int(round(z)))
         if not overwrite and pos in self._voxels:
             return
+        # Remap legacy block IDs to 26.2 registry names
+        if block == "minecraft:chain" or block.startswith("minecraft:chain["):
+            block = block.replace("minecraft:chain", "minecraft:iron_chain", 1)
+        elif block == "chain" or block.startswith("chain["):
+            block = block.replace("chain", "minecraft:iron_chain", 1)
         self._voxels[pos] = block
 
     def get_voxel(self, x: int, y: int, z: int) -> Optional[str]:

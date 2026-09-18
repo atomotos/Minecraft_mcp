@@ -1,9 +1,17 @@
-from typing import Optional, List, Dict, Any
 from typing import Optional, List, Dict, Any, Union
+import uuid
 import json
 import structlog
 from mcp.server.mcpserver import MCPServer
 from minecraft_mcp.client.bridge import BridgeClient, BridgeError
+from minecraft_mcp.procedural import (
+    GeometryRasterizer,
+    VoxelCompiler,
+    TerrainAdaptiveFoundationEngine,
+    ProceduralSessionManager,
+    BuildTransactionManager,
+    parse_geometry_spec,
+)
 from minecraft_mcp.safety import (
     validate_coordinates,
     validate_block_id,
@@ -705,6 +713,307 @@ async def get_landmarks(category: Optional[str] = None) -> Dict[str, Any]:
         "landmarks": [lm.model_dump() for lm in landmarks],
     }
 
+
+# ---------------------------------------------------------------------------
+# MCP 2.0 Tools (Phase 4: Procedural Construction & Token-Efficient Geometry)
+# ---------------------------------------------------------------------------
+
+@server.tool()
+async def build_procedural(
+    spec: Dict[str, Any],
+    anchor: List[int],
+    adaptive_foundation: bool = True,
+    foundation_material: str = "minecraft:stone_bricks",
+    clear_envelope: bool = True
+) -> Dict[str, Any]:
+    """Autonomous procedural construction primitive. Compiles continuous/composite Geometry IR (rings, arches, domes, radial arrays, lofts), generates an adaptive ground-anchored foundation if requested, executes 3D greedy cuboid meshing, and builds the structure via optimized fill_region batches."""
+    if len(anchor) != 3:
+        return {"success": False, "error": "anchor must be [x, y, z] coordinates", "code": "INVALID_ARGUMENT"}
+
+    ax, ay, az = int(anchor[0]), int(anchor[1]), int(anchor[2])
+    session_mgr = ProceduralSessionManager.get_instance()
+    rasterizer = GeometryRasterizer(template_registry=session_mgr.templates)
+
+    try:
+        structure_space = rasterizer.rasterize(spec)
+    except Exception as e:
+        return {"success": False, "error": f"Failed to rasterize geometry spec: {str(e)}", "code": "RASTERIZATION_ERROR"}
+
+    if structure_space.is_empty():
+        return {"success": False, "error": "Geometry spec produced 0 voxels", "code": "EMPTY_GEOMETRY"}
+
+    s_bounds = structure_space.get_bounds()
+    footprint_min_x = s_bounds["min"]["x"] + ax
+    footprint_max_x = s_bounds["max"]["x"] + ax
+    footprint_min_z = s_bounds["min"]["z"] + az
+    footprint_max_z = s_bounds["max"]["z"] + az
+
+    final_space = structure_space.clone()
+
+    # Adaptive Foundation Ground-Leveling & Anchoring pass
+    if adaptive_foundation:
+        foundation_engine = TerrainAdaptiveFoundationEngine(client=client)
+        try:
+            f_space = await foundation_engine.prepare_base_foundation(
+                min_x=footprint_min_x, min_z=footprint_min_z,
+                max_x=footprint_max_x, max_z=footprint_max_z,
+                base_y=ay,
+                foundation_material=foundation_material,
+                clear_envelope=clear_envelope,
+                superstructure_height=s_bounds["max"]["y"] - s_bounds["min"]["y"] + 2,
+            )
+            for (fx, fy, fz), f_mat in f_space.get_voxels_dict().items():
+                final_space.set_voxel(fx - ax, fy - ay, fz - az, f_mat, overwrite=False)
+        except Exception as e:
+            logger.warning("Adaptive foundation preparation encountered error", error=str(e))
+
+    compiler = VoxelCompiler()
+    compiled_plan = compiler.compile(final_space, anchor=(ax, ay, az))
+
+    project_id = f"proc_{uuid.uuid4().hex[:8]}"
+    tx_mgr = BuildTransactionManager.get_instance()
+    await tx_mgr.begin_transaction(project_id, compiled_plan.bounds, client)
+    exec_res = await tx_mgr.execute_plan_transactionally(project_id, compiled_plan, client, action_tracker)
+
+    if not exec_res.get("success", False):
+        return {
+            "success": False,
+            "project_id": project_id,
+            "error": exec_res.get("error", "Transaction execution failed"),
+            "rolled_back": exec_res.get("rolled_back", False),
+        }
+
+    # Register landmark in spatial world model
+    SpatialWorldModelManager.get_instance().record_structure(
+        project_id=project_id,
+        name=f"Procedural {spec.get('type', 'geometry')}",
+        structure_type=spec.get("type", "procedural"),
+        bounds=compiled_plan.bounds,
+        status="COMPLETED",
+    )
+
+    return {
+        "success": True,
+        "project_id": project_id,
+        "type": spec.get("type", "procedural"),
+        "total_voxels": compiled_plan.total_voxels,
+        "fill_regions_used": len(compiled_plan.fill_operations),
+        "sparse_batches_used": len(compiled_plan.sparse_placements),
+        "total_bridge_calls": compiled_plan.total_bridge_calls,
+        "compression_ratio": compiled_plan.compression_ratio,
+        "integrity_checksum": compiled_plan.integrity_checksum,
+        "materials_summary": compiled_plan.materials_summary,
+        "bounds": compiled_plan.bounds,
+    }
+
+@server.tool()
+def create_geometry_session(session_name: str = "default") -> Dict[str, Any]:
+    """Initializes a stateful server-side geometry session for composing complex architecture incrementally without token blowout."""
+    session_mgr = ProceduralSessionManager.get_instance()
+    sess_id = session_mgr.create_session(name=session_name)
+    return {"success": True, "session_id": sess_id, "name": session_name}
+
+@server.tool()
+def add_primitive(session_id: str, primitive: Dict[str, Any]) -> Dict[str, Any]:
+    """Adds a geometric primitive (box, cylinder, sphere, ring, arc, arch, column, dome, loft) to an active geometry session, returning a handle ID."""
+    try:
+        session_mgr = ProceduralSessionManager.get_instance()
+        handle_id = session_mgr.add_primitive(session_id, primitive)
+        return {"success": True, "session_id": session_id, "handle_id": handle_id, "type": primitive.get("type")}
+    except Exception as e:
+        return {"success": False, "error": str(e), "code": "SESSION_ERROR"}
+
+@server.tool()
+def compose_geometry(
+    session_id: str,
+    operation: str,
+    handles: List[str],
+    params: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Composes geometry handles in a session via CSG Booleans ('union', 'subtract', 'intersect') or Repetition Arrays ('radial_array', 'linear_array', 'grid_array', 'stack')."""
+    try:
+        session_mgr = ProceduralSessionManager.get_instance()
+        handle_id = session_mgr.compose(session_id, operation, handles, params)
+        return {"success": True, "session_id": session_id, "composed_handle": handle_id, "operation": operation}
+    except Exception as e:
+        return {"success": False, "error": str(e), "code": "COMPOSITION_ERROR"}
+
+@server.tool()
+def define_template(template_name: str, spec: Dict[str, Any]) -> Dict[str, Any]:
+    """Registers a reusable parameterized architectural template/prefab (e.g. 'roman_bay', 'gothic_window')."""
+    try:
+        session_mgr = ProceduralSessionManager.get_instance()
+        session_mgr.define_template(template_name, spec)
+        return {"success": True, "template_name": template_name}
+    except Exception as e:
+        return {"success": False, "error": str(e), "code": "TEMPLATE_ERROR"}
+
+@server.tool()
+def instantiate_template(
+    session_id: str,
+    template_name: str,
+    transform: Optional[Dict[str, Any]] = None,
+    parameters: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """Instances a registered architectural template inside an active geometry session with optional affine transform."""
+    try:
+        session_mgr = ProceduralSessionManager.get_instance()
+        handle_id = session_mgr.instantiate_template(session_id, template_name, transform, parameters)
+        return {"success": True, "session_id": session_id, "handle_id": handle_id, "template_name": template_name}
+    except Exception as e:
+        return {"success": False, "error": str(e), "code": "INSTANCE_ERROR"}
+
+@server.tool()
+async def compile_and_build(
+    session_id: str,
+    anchor: List[int],
+    root_handle: Optional[str] = None,
+    adaptive_foundation: bool = True,
+    foundation_material: str = "minecraft:stone_bricks",
+    dry_run: bool = False
+) -> Dict[str, Any]:
+    """Compiles a session's geometry tree into a discrete voxel workspace, performs 3D greedy cuboid meshing, and executes the build transactionally."""
+    if len(anchor) != 3:
+        return {"success": False, "error": "anchor must be [x, y, z] coordinates", "code": "INVALID_ARGUMENT"}
+
+    ax, ay, az = int(anchor[0]), int(anchor[1]), int(anchor[2])
+    session_mgr = ProceduralSessionManager.get_instance()
+
+    try:
+        structure_space = session_mgr.rasterize_session(session_id, root_handle=root_handle)
+    except Exception as e:
+        return {"success": False, "error": f"Failed to rasterize session: {str(e)}", "code": "RASTERIZATION_ERROR"}
+
+    if structure_space.is_empty():
+        return {"success": False, "error": "Session geometry produced 0 voxels", "code": "EMPTY_GEOMETRY"}
+
+    s_bounds = structure_space.get_bounds()
+    footprint_min_x = s_bounds["min"]["x"] + ax
+    footprint_max_x = s_bounds["max"]["x"] + ax
+    footprint_min_z = s_bounds["min"]["z"] + az
+    footprint_max_z = s_bounds["max"]["z"] + az
+
+    final_space = structure_space.clone()
+
+    if adaptive_foundation:
+        foundation_engine = TerrainAdaptiveFoundationEngine(client=client)
+        try:
+            f_space = await foundation_engine.prepare_base_foundation(
+                min_x=footprint_min_x, min_z=footprint_min_z,
+                max_x=footprint_max_x, max_z=footprint_max_z,
+                base_y=ay,
+                foundation_material=foundation_material,
+            )
+            for (fx, fy, fz), f_mat in f_space.get_voxels_dict().items():
+                final_space.set_voxel(fx - ax, fy - ay, fz - az, f_mat, overwrite=False)
+        except Exception as e:
+            logger.warning("Adaptive foundation preparation error in session compile", error=str(e))
+
+    compiler = VoxelCompiler()
+    compiled_plan = compiler.compile(final_space, anchor=(ax, ay, az))
+
+    if dry_run:
+        return {
+            "success": True,
+            "dry_run": True,
+            "session_id": session_id,
+            "total_voxels": compiled_plan.total_voxels,
+            "fill_regions_count": len(compiled_plan.fill_operations),
+            "sparse_blocks_count": len(compiled_plan.sparse_placements),
+            "materials_summary": compiled_plan.materials_summary,
+            "compression_ratio": compiled_plan.compression_ratio,
+            "bounds": compiled_plan.bounds,
+        }
+
+    project_id = f"proc_{uuid.uuid4().hex[:8]}"
+    tx_mgr = BuildTransactionManager.get_instance()
+    await tx_mgr.begin_transaction(project_id, compiled_plan.bounds, client)
+    exec_res = await tx_mgr.execute_plan_transactionally(project_id, compiled_plan, client, action_tracker)
+
+    if not exec_res.get("success", False):
+        return {
+            "success": False,
+            "project_id": project_id,
+            "error": exec_res.get("error", "Execution failed"),
+            "rolled_back": exec_res.get("rolled_back", False),
+        }
+
+    SpatialWorldModelManager.get_instance().record_structure(
+        project_id=project_id,
+        name=f"Procedural Session {session_id}",
+        structure_type="procedural_session",
+        bounds=compiled_plan.bounds,
+        status="COMPLETED",
+    )
+
+    return {
+        "success": True,
+        "project_id": project_id,
+        "session_id": session_id,
+        "total_voxels": compiled_plan.total_voxels,
+        "fill_regions_used": len(compiled_plan.fill_operations),
+        "sparse_batches_used": len(compiled_plan.sparse_placements),
+        "total_bridge_calls": compiled_plan.total_bridge_calls,
+        "compression_ratio": compiled_plan.compression_ratio,
+        "integrity_checksum": compiled_plan.integrity_checksum,
+        "materials_summary": compiled_plan.materials_summary,
+        "bounds": compiled_plan.bounds,
+    }
+
+@server.tool()
+async def verify_structure_compact(project_id: str) -> Dict[str, Any]:
+    """Returns a token-efficient verification report (bounds, total volume, material breakdown, integrity checksum) without dumping raw coordinates."""
+    tx_mgr = BuildTransactionManager.get_instance()
+    snapshot = tx_mgr.active_snapshots.get(project_id)
+    if not snapshot:
+        wm = SpatialWorldModelManager.get_instance()
+        for s in wm.structures:
+            if s.project_id == project_id:
+                return {
+                    "success": True,
+                    "project_id": project_id,
+                    "status": "RECORDED_COMPLETED",
+                    "name": s.name,
+                    "structure_type": s.structure_type,
+                    "bounds": s.bounds,
+                    "verified": True,
+                }
+        return {"success": False, "error": f"No active or recorded project found for '{project_id}'"}
+
+    b_min = snapshot.bounds["min"]
+    b_max = snapshot.bounds["max"]
+    samples = [
+        (b_min["x"], b_min["y"], b_min["z"]),
+        (b_max["x"], b_max["y"], b_max["z"]),
+        ((b_min["x"] + b_max["x"]) // 2, b_min["y"], (b_min["z"] + b_max["z"]) // 2),
+    ]
+    checked = 0
+    solid_count = 0
+    for sx, sy, sz in samples:
+        try:
+            b = await client.get_block(sx, sy, sz)
+            checked += 1
+            if not b.isAir:
+                solid_count += 1
+        except Exception:
+            pass
+
+    return {
+        "success": True,
+        "project_id": project_id,
+        "status": "VALID" if solid_count > 0 else "EMPTY",
+        "bounds": snapshot.bounds,
+        "samples_checked": checked,
+        "solid_samples": solid_count,
+        "committed": snapshot.committed,
+    }
+
+@server.tool()
+async def rollback_build(project_id: str) -> Dict[str, Any]:
+    """Rolls back placed blocks to pre-build snapshot state if an error or user cancellation occurred."""
+    tx_mgr = BuildTransactionManager.get_instance()
+    return await tx_mgr.rollback_transaction(project_id, client)
+
 # ---------------------------------------------------------------------------
 # MCP 2.0 Resources (Dynamic Context URIs)
 # ---------------------------------------------------------------------------
@@ -789,6 +1098,28 @@ async def resource_agent_plan() -> str:
         return json.dumps({"active_plan": False, "message": "No construction plan compiled in active session"})
     return engine.last_plan.model_dump_json(indent=2)
 
+@server.resource("minecraft://geometry/sessions")
+async def resource_geometry_sessions() -> str:
+    """Active server-side procedural geometry sessions and registered handles."""
+    session_mgr = ProceduralSessionManager.get_instance()
+    summary = {
+        sid: {
+            "name": sess.name,
+            "handles_count": len(sess.handles),
+            "handles": list(sess.handles.keys()),
+            "last_handle": sess.last_handle,
+        }
+        for sid, sess in session_mgr.sessions.items()
+    }
+    return json.dumps(summary, indent=2)
+
+@server.resource("minecraft://geometry/templates")
+async def resource_geometry_templates() -> str:
+    """Registered procedural architectural templates (prefabs) available for instancing."""
+    session_mgr = ProceduralSessionManager.get_instance()
+    return json.dumps(list(session_mgr.templates.keys()), indent=2)
+
+
 # ---------------------------------------------------------------------------
 # MCP 2.0 Prompts (Conversational Workflow Templates)
 # ---------------------------------------------------------------------------
@@ -867,6 +1198,20 @@ Mission Workflow:
 4. Construction: Erect the base with `build_structure(blueprint='{theme}', location=best_location)`.
 5. Registration: Register your new home base using `mark_location(name='Home Base', position=[...], category='base')`.
 6. World Map Update: Query `minecraft://world/map` to review all established landmarks and structures.
+"""
+
+@server.prompt()
+def construct_procedural_arena(radius: int = 24, inner_radius: int = 18, height: int = 12) -> str:
+    """Prompt template instructing the model to construct a circular arena using the procedural engine rather than raw coordinates."""
+    return f"""You are an architectural procedural builder constructing a circular arena.
+Target parameters: outer radius {radius}, inner radius {inner_radius}, height {height}.
+
+Procedural Protocol:
+1. Do NOT generate raw voxel coordinate arrays.
+2. Build the arena via `build_procedural` with geometry spec:
+   {{"type": "ring", "center": [0, 0, 0], "outer_radius": {radius}, "inner_radius": {inner_radius}, "height": {height}, "material": "minecraft:smooth_sandstone"}}
+3. Keep `adaptive_foundation=true` to ensure proper ground leveling and underpinning.
+4. Verify the structure compactly using `verify_structure_compact()`.
 """
 
 def main():

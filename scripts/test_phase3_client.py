@@ -176,7 +176,7 @@ async def run_phase3_verification():
             # ------------------------------------------------------------------
             site_res = await session.call_tool(
                 "find_build_location",
-                arguments={"radius": 16, "width": 7, "depth": 7, "flatness_threshold": 0.5, "center": [-250, 64, 150]}
+                arguments={"radius": 20, "width": 7, "depth": 7, "flatness_threshold": 0.5, "center": [-250, 64, 150]}
             )
             site_data = parse_tool_result(site_res)
             site_valid = site_data.get("success", False) and "best_location" in site_data

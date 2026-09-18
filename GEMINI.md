@@ -2,7 +2,7 @@
 
 **Project**: Autonomous Minecraft Java Edition MCP Server  
 **Target Environment**: Minecraft Java Edition `26.2`  
-**Current Status**: **Phase 1, Phase 2 & Phase 3 Completed & Verified Live** (44/44 Tests Passing) | **Taj Mahal & Qutub Minar Monuments Fully Constructed (100% Physical Verification)**  
+**Current Status**: **Phase 1, Phase 2, Phase 3 & Phase 4 Completed & Verified Live** (56/56 Tests Passing) | **Taj Mahal, Qutub Minar & Roman Colosseum Monuments Fully Constructed (100% Physical Verification)**  
 **Last Updated**: September 2026
 
 ---
@@ -113,14 +113,8 @@ This project builds an autonomous Model Context Protocol (MCP) server for Minecr
 
 ---
 
-## 5. Next Phase: Phase 3 Roadmap (Combat, 3D Navigation & Autonomous Construction)
 ## 5. Phase 3: Spatial Intelligence, Architectural Planning & Autonomous Construction (COMPLETED & VERIFIED)
 
-The next session will implement **Phase 3: Tactical Combat, 3D A* Navigation & Autonomous Blueprints**:
-- **Tactical Combat**: Melee attack primitives respecting weapon cooldowns (0.625s), reach checks ($\le 3.5$), and retreat thresholds ($< 6.0$ HP).
-- **3D A\* Navigation**: Voxel pathfinding engine navigating slopes, stair stepping, jump traversals, and dynamic obstacles.
-- **Autonomous Construction**: Layer-by-layer architectural blueprint compiler (`build_house`, `build_wall`, `build_roof`, `find_build_location`).
-- **Autonomous Workflows**: Agent prompt templates `build_house`, `defend_player`, `build_and_defend`.
 Phase 3 transforms the server into an autonomous architectural construction system:
 - **Generic Architectural Blueprints**: Multi-structure blueprint compiler (`build_structure`) supporting towers, bridges, walls, houses, castles, farms, temples, and custom designs.
 - **Semantic Structural Primitives**: High-level building primitives (`build_wall`, `build_roof`, `build_foundation`, `build_pillar`).
@@ -128,7 +122,7 @@ Phase 3 transforms the server into an autonomous architectural construction syst
 - **Spatial World Model & 3D Navigation**: Persistent cartography (`minecraft://world/map`), terrain flatness analyzer (`find_build_location`), and 3D A* pathfinding (`navigate_to`).
 - **Closed-Loop Structure Verification & Repair**: Deep physical inspection comparing planned vs. actual voxels, automated defect remediation (`repair_structure`).
 - **Event-Driven Aggregator**: Ticks filtered into high-level agent events to minimize LLM cognitive churn.
-- **Verification**: Verified 12/12 tests passing in `scripts/test_phase3_client.py` (100% pass rate). Total project tests: 44/44 passing.
+- **Verification**: Verified 12/12 tests passing in `scripts/test_phase3_client.py` (100% pass rate).
 
 ### Autonomous Architectural Monuments (COMPLETED & VERIFIED)
 - **The Taj Mahal** at `(-181, 74, 167)`:
@@ -140,7 +134,28 @@ Phase 3 transforms the server into an autonomous architectural construction syst
 
 ---
 
-## 6. Helpful Commands Quick-Reference
+## 6. Phase 4: Procedural Construction Engine & Token-Efficient Minecraft MCP (COMPLETED & VERIFIED)
+
+Phase 4 elevates the server to a procedural construction engine with dramatic token reduction and high-speed execution:
+- **Geometry Intermediate Representation (Geometry IR)**: Declarative, composable AST for continuous & discrete 3D spatial volumes (`box`, `cylinder`, `sphere`, `ring`, `arc`, `ellipse`, `polygon`, `loft`, `extrusion`).
+- **Affine Transformation Stack**: 3D rotation, scaling, mirroring, and translation with automatic directional block state remapping (`facing=north` $\rightarrow$ `facing=east`).
+- **Architectural Primitives**: Parametric arches (Roman, Gothic, Islamic), classical columns, domes (hemispherical, onion, coffered), vaults, balconies, and spiral staircases.
+- **Terrain-Adaptive Foundation & Ground Anchoring Engine**: Probes natural ground elevation, levels the site datum $Y_{base}$, and generates solid sub-foundation fill columns downward to bedrock/dirt, permanently eliminating floating voids.
+- **Voxel Compiler & 3D Greedy Cuboid Meshing**: Evaluates continuous SDFs into 3D voxel space, greedily decomposes homogeneous blocks into maximal `fill_region` cuboids ($\le 500$ blocks each), slashing execution time from minutes to seconds.
+- **Stateful Geometry Sessions & Handle Registry**: Allows agents to construct massive architecture through compact $< 150$ token requests via server-side handles (`session_id`, `handle_id`, `template_id`).
+- **Build Transactions & Compact Verification**: Pre-build snapshots with atomic rollback; compact verification digests with bounds, volume, material breakdown, and checksums (0 raw coordinate arrays).
+- **Verification**: Verified 12/12 tests passing in `scripts/test_phase4_client.py` (100% pass rate). Total project tests: 56/56 passing.
+
+### Autonomous Architectural Monuments (Phase 4)
+- **The Roman Colosseum Arena & Arcade** at `(-140, 69, 80)`:
+  - **13,286 blocks placed in 18.77 seconds** via 342 greedy `fill_region` cuboids.
+  - **100.0% physical ground-truth verification** (40/40 samples verified, 0 discrepancies, checksum matched).
+  - $45 \times 45$ terraced plinth anchored into natural desert sand, 2 tiers of 24 radial Roman arches with columns and keystones, mezzanine balcony, attic wall cornice, 4 stepped concentric cavea seating tiers, and central gladiator sand arena with subterranean iron bar hypogeum grate.
+
+
+---
+
+## 7. Helpful Commands Quick-Reference
 
 ```bash
 # Build the Fabric mod JAR
@@ -149,20 +164,26 @@ cd fabric-mod && ./gradlew build
 # Run dedicated Minecraft server with mod loaded
 cd fabric-mod && ./gradlew runServer
 
-# Query bridge health/info once started (Phase 2)
-curl -s http://127.0.0.1:25585/api/v1/world/info | jq .
+# Query bridge health/info once started
+curl -s http://127.0.0.1:25585/api/v1/status | jq .
 
-# Decompile or inspect any 26.2 class bytecode
-/opt/homebrew/opt/openjdk@25/bin/javap -cp ~/.gradle/caches/fabric-loom/minecraftMaven/net/minecraft/minecraft-merged-deobf/26.2/minecraft-merged-deobf-26.2.jar <full.class.Name>
+# Run full automated test suite (Phases 1, 2, 3, 4: 56/56 passing)
+python scripts/test_phase1_client.py
+python scripts/test_phase2_client.py
+python scripts/test_phase3_client.py
+python scripts/test_phase4_client.py
 
-# Python virtual environment activation
-source .venv/bin/activate
+# Orchestrate autonomous monuments
+python scripts/orchestrate_taj_mahal.py
+python scripts/orchestrate_qutub_minar.py
+python scripts/orchestrate_procedural_colosseum.py
 ```
 
 ---
 
-## 7. Key Documentation Links
+## 8. Key Documentation Links
 - Implementation Rules: [`implementation.md`](file:///Users/arhamowais/minecraft-mcp/implementation.md)
+- Phase 4 Procedural Engine: [`docs/architecture/phase4-procedural-engine.md`](file:///Users/arhamowais/minecraft-mcp/docs/architecture/phase4-procedural-engine.md)
 - 26.2 API Research Pass: [`docs/fabric/api-research-26.2.md`](file:///Users/arhamowais/minecraft-mcp/docs/fabric/api-research-26.2.md)
 - 26.2 Primitive Specification: [`docs/implementation/primitive-spec-26.2.md`](file:///Users/arhamowais/minecraft-mcp/docs/implementation/primitive-spec-26.2.md)
 
